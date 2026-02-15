@@ -19,7 +19,11 @@ Organise and analyse your pytest benchmarks
 
 ## Features
 
-- `...`
+- Load pytest-benchmark JSON artifact folders and normalize runs, groups, marks, params, and custom grouping metadata.
+- Compare reference runs against candidate runs over time with per-case and per-group delta summaries.
+- Build custom grouping views with precedence across custom groups, benchmark groups, marks, and params.
+- Associate optional profiler artifacts with benchmark runs for code-level analysis context.
+- Serve an interactive local NiceGUI dashboard for exploratory benchmark comparison.
 
 
 ## Installation
@@ -31,16 +35,80 @@ python -m pip install pytest-park
 
 With [`uv`](https://docs.astral.sh/uv/):
 ```bash
-uv add pytest-park
+uv add --group test pytest-park
 ```
 
 
 ## How to use it
 
-```python
-import pytest_park
+```bash
+# Print version
+pytest-park version
 
-...
+# Start interactive mode (no arguments)
+pytest-park
+
+# Inspect a benchmark folder
+pytest-park load ./benchmarks
+
+# Analyze grouping distribution
+pytest-park analyze ./benchmarks --group-by group --group-by param:device
+
+# Compare a candidate run against a named reference tag/run id
+pytest-park compare ./benchmarks --reference reference --candidate candidate-v2 --group-by custom:scenario
+
+# Compare latest run against second-latest run when --reference/--candidate are omitted
+pytest-park compare ./benchmarks
+
+# Normalize method names by removing configured postfixes
+pytest-park analyze ./benchmarks --original-postfix _orig --reference-postfix _ref
+
+# Launch interactive dashboard
+pytest-park serve ./benchmarks --reference reference --original-postfix _orig --reference-postfix _ref --host 127.0.0.1 --port 8080
+```
+
+### Benchmark folder expectations
+
+- Input artifacts are pytest-benchmark JSON files (`--benchmark-save` output) stored anywhere under a folder.
+- Reference selection uses explicit run id or tag metadata (`metadata.run_id`, `metadata.tag`, or fallback identifiers).
+- Default comparison baseline is latest vs second-latest run when `--reference` and `--candidate` are omitted.
+- Grouping defaults to: custom groups > benchmark group > marks > params.
+- Custom grouping tokens include `custom:<key>`, `group`, `marks`, `params`, and `param:<name>`.
+- Method normalization supports optional `--original-postfix` and `--reference-postfix` to align benchmark names across implementations.
+
+### pytest-benchmark group stats override
+
+If your benchmark method names encode postfixes and parameter segments, you can override
+`pytest_benchmark_group_stats` using the helper from this package:
+
+```python
+# tests/conftest.py
+from pytest_park.pytest_benchmark import default_pytest_benchmark_group_stats
+
+
+def pytest_benchmark_group_stats(config, benchmarks, group_by):
+	return default_pytest_benchmark_group_stats(
+		config,
+		benchmarks,
+		group_by,
+		original_postfix="_orig",
+		reference_postfix="_ref",
+		group_values_by_postfix={
+			"_orig": "original",
+			"_ref": "reference",
+			"none": "unlabeled",
+		},
+	)
+```
+
+This stores parsed parts in `extra_info["pytest_park_name_parts"]` with `base_name`, `parameters`, and `postfix`.
+
+If you use postfixes in benchmark names, expose matching pytest-benchmark options in the same `conftest.py`:
+
+```python
+def pytest_addoption(parser):
+	parser.addoption("--benchmark-original-postfix", action="store", default="")
+	parser.addoption("--benchmark-reference-postfix", action="store", default="")
 ```
 
 
