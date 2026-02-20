@@ -58,9 +58,11 @@ Benchmarks can be grouped for analysis using precedence order:
 
 1. **custom:<key>** - Custom metadata from `extra_info["custom_groups"]["<key>"]`
 2. **group** - Base method name (e.g., `test_func1`)
-3. **marks** - pytest markers
-4. **params** - All parameters combined
-5. **param:<name>** - Specific parameter (e.g., `param:device`)
+3. **name**, **method**, **func** - Base method name (e.g., `test_func1`)
+4. **fullname**, **fullfunc** - Full path with base method name
+5. **param** - All parameters combined (can ignore specific parameters via `ignore_params`)
+6. **param:<name>** - Specific parameter (e.g., `param:device`)
+7. **postfix**, **benchmark_postfix** - The parsed postfix (e.g., `_original`)
 
 ### 5. Performance Metrics
 
@@ -146,7 +148,7 @@ Add pytest-park grouping to your `conftest.py`:
 from typing import Any
 from pytest_park.pytest_benchmark import default_pytest_benchmark_group_stats
 
-def pytest_benchmark_group_stats(config: Any, benchmarks: list[Any], group_by: str) -> dict[str, list[Any]]:
+def pytest_benchmark_group_stats(config: Any, benchmarks: list[Any], group_by: str) -> list[tuple[str, list[Any]]]:
     """Enable pytest-park name parsing and grouping."""
     return default_pytest_benchmark_group_stats(
         config,
@@ -158,6 +160,7 @@ def pytest_benchmark_group_stats(config: Any, benchmarks: list[Any], group_by: s
             "original": "baseline",
             "optimized": "improved",
         },
+        ignore_params=["device"],  # Optional: ignore specific parameters in grouping
     )
 ```
 
@@ -166,6 +169,7 @@ This configuration:
 - Normalizes names by removing postfixes
 - Groups `test_func_original` and `test_func_optimized` together
 - Creates friendly labels for visualization
+- Can ignore specific parameters (like `device`) when grouping by `param`
 
 ### Step 3: Add Custom Metadata for Tracking Optimization Techniques (Optional)
 
