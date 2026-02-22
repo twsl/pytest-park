@@ -23,8 +23,8 @@ dependencies = [
     "nicegui>=3.7.1",
 ]
 
-[project.optional-dependencies]
-extra = []
+#[project.optional-dependencies]
+#extra = []
 
 [project.urls]
 homepage = "https://twsl.github.io/pytest-park/"
@@ -43,11 +43,11 @@ default-groups = "all"
 [dependency-groups]
 dev = [
     "ruff>=0.15.2",
-    "ty>=0.0.17",
+    "ty>=0.0.18",
     "bandit>=1.9.3",
     "prek>=0.3.3",
     "vulture>=2.14",
-    "copier>=9.11.3",
+    "copier>=9.12.0",
 ]
 test = [
     "pytest>=9.0.2",
