@@ -81,7 +81,7 @@ def test_cli_interactive_quick_serve_uses_defaults(monkeypatch) -> None:
             return True
 
     monkeypatch.setattr(cli_module.sys, "stdin", _TTY())
-    prompts = iter(["3", "./benchmarks"])
+    prompts = iter(["3", "./.benchmarks"])
     monkeypatch.setattr("builtins.input", lambda _prompt: next(prompts))
 
     captured: dict[str, list[str] | None] = {"argv": None}
@@ -95,4 +95,4 @@ def test_cli_interactive_quick_serve_uses_defaults(monkeypatch) -> None:
     exit_code = cli_module._run_interactive(cli_module._build_parser())
 
     assert exit_code == 0
-    assert captured["argv"] == ["serve", "./benchmarks"]
+    assert captured["argv"] == ["serve", "./.benchmarks"]

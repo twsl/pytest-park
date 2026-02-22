@@ -51,26 +51,26 @@ pytest-park version
 pytest-park
 
 # Inspect a benchmark folder
-pytest-park load ./benchmarks
+pytest-park load ./.benchmarks
 
 # Analyze grouping distribution
-pytest-park analyze ./benchmarks --group-by group --group-by param:device
+pytest-park analyze ./.benchmarks --group-by group --group-by param:device
 
 # Compare a candidate run against a named reference tag/run id
-pytest-park compare ./benchmarks --reference reference --candidate candidate-v2 --group-by custom:scenario
+pytest-park compare ./.benchmarks --reference reference --candidate candidate-v2 --group-by custom:scenario
 
 # Compare latest run against second-latest run when --reference/--candidate are omitted
 # By default, this will compare and print details for all methods.
-pytest-park compare ./benchmarks
+pytest-park compare ./.benchmarks
 
 # Compare a specific method only
-pytest-park compare ./benchmarks --method test_func1
+pytest-park compare ./.benchmarks --method test_func1
 
 # Normalize method names by removing configured postfixes
-pytest-park analyze ./benchmarks --original-postfix _orig --reference-postfix _ref
+pytest-park analyze ./.benchmarks --original-postfix _orig --reference-postfix _ref
 
 # Launch interactive dashboard
-pytest-park serve ./benchmarks --reference reference --original-postfix _orig --reference-postfix _ref --host 127.0.0.1 --port 8080
+pytest-park serve ./.benchmarks --reference reference --original-postfix _orig --reference-postfix _ref --host 127.0.0.1 --port 8080
 ```
 
 ### Benchmark folder expectations

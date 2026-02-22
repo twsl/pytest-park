@@ -224,7 +224,7 @@ pytest tests/ --benchmark-only --benchmark-save=optimized_v1 --benchmark-save-da
 #### Quick Comparison (Latest vs Previous)
 
 ```bash
-pytest-park compare ./benchmarks
+pytest-park compare ./.benchmarks
 ```
 
 By default, this will compare and print details for all methods without prompting.
@@ -241,13 +241,13 @@ Method test_process_data: count=2, avg_delta=-50.0%, median_delta=-50.0%, avg_sp
 #### Explicit Run Selection
 
 ```bash
-pytest-park compare ./benchmarks --reference baseline --candidate optimized_v1
+pytest-park compare ./.benchmarks --reference baseline --candidate optimized_v1
 ```
 
 #### Group by Base Method
 
 ```bash
-pytest-park compare ./benchmarks --reference baseline --candidate optimized_v1 --group-by group
+pytest-park compare ./.benchmarks --reference baseline --candidate optimized_v1 --group-by group
 ```
 
 **Output**:
@@ -261,7 +261,7 @@ Accumulated: count=2, avg_delta=-50.0%, median_delta=-50.0%, avg_speedup=2.0, im
 #### Group by Optimization Technique
 
 ```bash
-pytest-park compare ./benchmarks --reference baseline --candidate optimized_v1 --group-by custom:technique
+pytest-park compare ./.benchmarks --reference baseline --candidate optimized_v1 --group-by custom:technique
 ```
 
 **Output**:
@@ -275,7 +275,7 @@ pytest-park compare ./benchmarks --reference baseline --candidate optimized_v1 -
 Focus on specific methods:
 
 ```bash
-pytest-park compare ./benchmarks --reference baseline --candidate optimized_v1 --method test_process_data
+pytest-park compare ./.benchmarks --reference baseline --candidate optimized_v1 --method test_process_data
 ```
 
 **Output shows**:
@@ -289,7 +289,7 @@ pytest-park compare ./benchmarks --reference baseline --candidate optimized_v1 -
 For exploratory analysis:
 
 ```bash
-pytest-park serve ./benchmarks --reference baseline --port 8080
+pytest-park serve ./.benchmarks --reference baseline --port 8080
 ```
 
 **Features**:
@@ -310,7 +310,7 @@ Access at: `http://127.0.0.1:8080`
 Inspect benchmark folder and list available runs.
 
 ```bash
-pytest-park load ./benchmarks
+pytest-park load ./.benchmarks
 ```
 
 **Output**: Lists runs found, case counts, and source files.
@@ -320,7 +320,7 @@ pytest-park load ./benchmarks
 Compare latest vs second-latest run with grouping analysis.
 
 ```bash
-pytest-park analyze ./benchmarks --group-by group --group-by param:device --method test_func1
+pytest-park analyze ./.benchmarks --group-by group --group-by param:device --method test_func1
 ```
 
 **Options**:
@@ -336,7 +336,7 @@ pytest-park analyze ./benchmarks --group-by group --group-by param:device --meth
 Compare specific runs with explicit selection.
 
 ```bash
-pytest-park compare ./benchmarks --reference baseline --candidate v2.0 --group-by custom:technique
+pytest-park compare ./.benchmarks --reference baseline --candidate v2.0 --group-by custom:technique
 ```
 
 **Options**:
@@ -356,7 +356,7 @@ pytest-park compare ./benchmarks --reference baseline --candidate v2.0 --group-b
 Launch interactive NiceGUI dashboard.
 
 ```bash
-pytest-park serve ./benchmarks --reference baseline --host 127.0.0.1 --port 8080
+pytest-park serve ./.benchmarks --reference baseline --host 127.0.0.1 --port 8080
 ```
 
 **Options**:
@@ -530,10 +530,10 @@ ls -la .benchmarks/<platform>/
 
 ```bash
 # Use correct postfix configuration
-pytest-park compare ./benchmarks --original-postfix _original --reference-postfix _optimized
+pytest-park compare ./.benchmarks --original-postfix _original --reference-postfix _optimized
 
 # Or check test names are consistent
-pytest-park load ./benchmarks  # Lists all cases
+pytest-park load ./.benchmarks  # Lists all cases
 ```
 
 ### Issue: Delta shows 0% but code changed
@@ -583,7 +583,7 @@ benchmark.extra_info["custom_groups"] = {
 }
 ```
 
-Then: `pytest-park compare ./benchmarks --group-by custom:technique`
+Then: `pytest-park compare ./.benchmarks --group-by custom:technique`
 
 ---
 

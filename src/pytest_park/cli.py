@@ -259,7 +259,7 @@ def _run_interactive(parser: argparse.ArgumentParser) -> int:
         return main(["version"])
 
     try:
-        benchmark_folder = input("Benchmark folder [./benchmarks]: ").strip() or "./benchmarks"
+        benchmark_folder = input("Benchmark folder [./.benchmarks]: ").strip() or "./.benchmarks"
     except EOFError:
         return 1
 
