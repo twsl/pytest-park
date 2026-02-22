@@ -60,7 +60,11 @@ pytest-park analyze ./benchmarks --group-by group --group-by param:device
 pytest-park compare ./benchmarks --reference reference --candidate candidate-v2 --group-by custom:scenario
 
 # Compare latest run against second-latest run when --reference/--candidate are omitted
+# By default, this will compare and print details for all methods.
 pytest-park compare ./benchmarks
+
+# Compare a specific method only
+pytest-park compare ./benchmarks --method test_func1
 
 # Normalize method names by removing configured postfixes
 pytest-park analyze ./benchmarks --original-postfix _orig --reference-postfix _ref

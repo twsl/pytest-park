@@ -146,9 +146,10 @@ def _cmd_analyze(runs, grouping: list[str], distinct_params: list[str], method: 
     reference_run, candidate_run = select_latest_and_previous_runs(runs)
     deltas = compare_runs(reference_run, candidate_run, grouping or None, distinct_params or None)
     _print_overview(deltas, reference_run.run_id, candidate_run.run_id)
-    selected_method = method or _select_method_interactively(runs)
-    if selected_method:
-        _print_method_details(runs, reference_run, candidate_run, deltas, selected_method, distinct_params)
+
+    methods_to_inspect = [method] if method else list_methods(runs)
+    for m in methods_to_inspect:
+        _print_method_details(runs, reference_run, candidate_run, deltas, m, distinct_params)
 
 
 def _cmd_compare(
@@ -171,9 +172,9 @@ def _cmd_compare(
     deltas = compare_runs(reference_run, candidate_run, grouping or None, distinct_params or None)
     _print_overview(deltas, reference_run.run_id, candidate_run.run_id)
 
-    selected_method = method or _select_method_interactively(runs)
-    if selected_method:
-        _print_method_details(runs, reference_run, candidate_run, deltas, selected_method, distinct_params)
+    methods_to_inspect = [method] if method else list_methods(runs)
+    for m in methods_to_inspect:
+        _print_method_details(runs, reference_run, candidate_run, deltas, m, distinct_params)
 
 
 def _print_overview(deltas, reference_id: str, candidate_id: str) -> None:
@@ -192,28 +193,6 @@ def _print_overview(deltas, reference_id: str, candidate_id: str) -> None:
             f"- {summary.label}: count={summary.count}, avg_delta={summary.average_delta_pct:.2f}%, "
             f"median_delta={summary.median_delta_pct:.2f}%, improved={summary.improvements}, regressed={summary.regressions}"
         )
-
-
-def _select_method_interactively(runs) -> str | None:
-    methods = list_methods(runs)
-    if not methods:
-        return None
-    print("Available methods:")
-    for item in methods:
-        print(f"- {item}")
-
-    if not sys.stdin.isatty():
-        print("Use --method <name> to show method-level statistics")
-        return None
-
-    try:
-        selected = input("Method to inspect (leave empty to skip): ").strip()
-    except EOFError:
-        return None
-
-    if not selected:
-        return None
-    return selected
 
 
 def _print_method_details(runs, reference_run, candidate_run, deltas, method: str, distinct_params: list[str]) -> None:

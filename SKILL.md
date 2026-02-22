@@ -227,11 +227,15 @@ pytest tests/ --benchmark-only --benchmark-save=optimized_v1 --benchmark-save-da
 pytest-park compare ./benchmarks
 ```
 
+By default, this will compare and print details for all methods without prompting.
+
 **Output**:
 
 ```
 Compared run optimized_v1 against reference baseline
 Accumulated: count=2, avg_delta=-50.0%, median_delta=-50.0%, avg_speedup=2.0, improved=2, regressed=0, unchanged=0
+Method test_process_data: count=2, avg_delta=-50.0%, median_delta=-50.0%, avg_speedup=2.0
+  current=optimized_v1 vs=baseline distinct= mean=0.050000 vs_ref=0.100000 delta=-50.00%
 ```
 
 #### Explicit Run Selection
@@ -322,7 +326,7 @@ pytest-park analyze ./benchmarks --group-by group --group-by param:device --meth
 **Options**:
 
 - `--group-by <token>` - Grouping strategy (repeatable)
-- `--method <name>` - Focus on specific method
+- `--method <name>` - Focus on specific method (if omitted, compares all methods)
 - `--distinct-param <key>` - Treat parameter as distinct (don't merge)
 - `--original-postfix <str>` - Configure name parsing
 - `--reference-postfix <str>` - Configure name parsing
@@ -340,7 +344,7 @@ pytest-park compare ./benchmarks --reference baseline --candidate v2.0 --group-b
 - `--reference <id|tag>` - Reference run (defaults to oldest if only candidate specified)
 - `--candidate <id|tag>` - Candidate run (defaults to latest if only reference specified)
 - `--group-by <token>` - Grouping strategy (repeatable)
-- `--method <name>` - Focus on specific method
+- `--method <name>` - Focus on specific method (if omitted, compares all methods)
 - `--distinct-param <key>` - Treat parameter as distinct
 - `--original-postfix <str>` - Configure name parsing
 - `--reference-postfix <str>` - Configure name parsing
