@@ -289,19 +289,25 @@ Access at: `http://127.0.0.1:8080`
 
 ## CLI Command Reference
 
-### `pytest-park load <folder>`
+### `pytest-park version`
 
-Inspect benchmark folder and list available runs.
+Print the installed version.
 
 ```bash
-pytest-park load ./.benchmarks
+pytest-park version
 ```
 
-**Output**: Lists runs found, case counts, and source files.
+### `pytest-park` (no arguments)
+
+Launch interactive mode. Presents a numbered menu for `analyze`, `serve`, and `version`, then prompts for required arguments.
+
+```bash
+pytest-park
+```
 
 ### `pytest-park analyze <folder>`
 
-Compare latest vs second-latest run with grouping analysis.
+Compare two runs and print a rich summary table.
 
 ```bash
 pytest-park analyze ./.benchmarks --group-by group --group-by param:device --exclude-param device
@@ -309,15 +315,16 @@ pytest-park analyze ./.benchmarks --group-by group --group-by param:device --exc
 
 **Options**:
 
-- `--reference <id|tag>` - Reference run (defaults to oldest if only candidate specified)
-- `--candidate <id|tag>` - Candidate run (defaults to latest if only reference specified)
+- `--reference <id|tag>` - Reference run (defaults to second-latest when both flags are omitted; when only `--candidate` is given, defaults to the run immediately preceding that candidate)
+- `--candidate <id|tag>` - Candidate run (defaults to latest when only `--reference` is given)
 - `--group-by <token>` - Grouping strategy (repeatable)
-- `--distinct-param <key>` - Treat parameter as distinct (don't merge)
+- `--distinct-param <key>` - Treat parameter as a separate dimension instead of collapsing it (repeatable)
 - `--exclude-param <key>` - Parameter key to exclude from comparison (repeatable)
-- `--original-postfix <str>` - Configure name parsing
-- `--reference-postfix <str>` - Configure name parsing
+- `--original-postfix <str>` - Configure name parsing for candidate/original method names
+- `--reference-postfix <str>` - Configure name parsing for reference method names
+- `--profiler-folder <path>` - Optional folder containing profiler JSON artifacts to attach
 
-**No arguments**: Compares latest vs second-latest
+**No arguments**: Compares latest run (candidate) against second-latest run (reference)
 
 ### `pytest-park serve <folder>`
 
@@ -330,11 +337,13 @@ pytest-park serve ./.benchmarks --reference baseline --host 127.0.0.1 --port 808
 **Options**:
 
 - `--reference <id|tag>` - Default reference run
-- `--group-by <token>` - Initial grouping
+- `--group-by <token>` - Initial grouping (repeatable)
+- `--distinct-param <key>` - Treat parameter as a separate dimension (repeatable)
 - `--host <address>` - Server host (default: 127.0.0.1)
 - `--port <number>` - Server port (default: 8080)
-- `--original-postfix <str>` - Configure name parsing
-- `--reference-postfix <str>` - Configure name parsing
+- `--original-postfix <str>` - Configure name parsing for candidate/original method names
+- `--reference-postfix <str>` - Configure name parsing for reference method names
+- `--profiler-folder <path>` - Optional folder containing profiler JSON artifacts to attach
 
 ---
 
@@ -498,10 +507,10 @@ ls -la .benchmarks/<platform>/
 
 ```bash
 # Use correct postfix configuration
-pytest-park compare ./.benchmarks --original-postfix _original --reference-postfix _optimized
+pytest-park analyze ./.benchmarks --original-postfix _original --reference-postfix _optimized
 
-# Or check test names are consistent
-pytest-park load ./.benchmarks  # Lists all cases
+# Or check test names are consistent by inspecting the benchmarks folder
+ls -la .benchmarks/
 ```
 
 ### Issue: Delta shows 0% but code changed
@@ -551,7 +560,7 @@ benchmark.extra_info["custom_groups"] = {
 }
 ```
 
-Then: `pytest-park compare ./.benchmarks --group-by custom:technique`
+Then: `pytest-park analyze ./.benchmarks --group-by custom:technique`
 
 ---
 
@@ -573,17 +582,17 @@ When a user asks about benchmarking function improvements:
    └─ Yes → Continue
 
 4. What do they want to do?
-   ├─ Compare two specific runs → Use: pytest-park compare --reference <A> --candidate <B>
-   ├─ Compare latest vs previous → Use: pytest-park compare (no args) or pytest-park analyze
+   ├─ Compare two specific runs → Use: pytest-park analyze --reference <A> --candidate <B>
+   ├─ Compare latest vs previous → Use: pytest-park analyze (no args)
    ├─ Explore interactively → Use: pytest-park serve
-   ├─ Understand a specific method → Use: pytest-park compare --method <name>
-   ├─ Group by technique/metadata → Use: pytest-park compare --group-by custom:<key>
-   └─ Group by parameters → Use: pytest-park compare --group-by param:<name>
+   ├─ Group by technique/metadata → Use: pytest-park analyze --group-by custom:<key>
+   ├─ Group by parameters → Use: pytest-park analyze --group-by param:<name>
+   └─ Exclude a parameter → Use: pytest-park analyze --exclude-param <name>
 
 5. Are results unclear or unexpected?
    ├─ Check naming conventions match postfix configuration
    ├─ Verify benchmark data was saved with --benchmark-save-data
-   ├─ Use pytest-park load to inspect available runs
+   ├─ Inspect .benchmarks/ folder directly (ls -la .benchmarks/)
    └─ Check for system variability or insufficient rounds
 ```
 

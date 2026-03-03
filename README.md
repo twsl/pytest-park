@@ -47,33 +47,48 @@ uv add --group test pytest-park
 # Print version
 pytest-park version
 
-# Start interactive mode (no arguments)
+# Start interactive mode (no arguments) — presents a numbered menu for analyze/serve/version
 pytest-park
 
-# Analyze grouping distribution and compare latest run against second-latest run
+# Analyze and compare latest run (candidate) against second-latest run (reference)
 pytest-park analyze ./.benchmarks --group-by group --group-by param:device
 
-# Compare a candidate run against a named reference tag/run id
+# Compare a named candidate run against a named reference tag/run id
 pytest-park analyze ./.benchmarks --reference reference --candidate candidate-v2 --group-by custom:scenario
+
+# When only --candidate is given, the run immediately before it in the list is used as reference
+pytest-park analyze ./.benchmarks --candidate candidate-v2
 
 # Exclude specific parameters from the comparison
 pytest-park analyze ./.benchmarks --exclude-param device
 
-# Normalize method names by removing configured postfixes
+# Keep a parameter distinct (not collapsed) during grouping
+pytest-park analyze ./.benchmarks --group-by group --distinct-param device
+
+# Normalize method names by stripping configured postfixes
 pytest-park analyze ./.benchmarks --original-postfix _orig --reference-postfix _ref
+
+# Include profiler artifacts alongside benchmark data
+pytest-park analyze ./.benchmarks --profiler-folder ./.profiler --group-by group
 
 # Launch interactive dashboard
 pytest-park serve ./.benchmarks --reference reference --original-postfix _orig --reference-postfix _ref --host 127.0.0.1 --port 8080
+
+# Launch dashboard with profiler data
+pytest-park serve ./.benchmarks --profiler-folder ./.profiler --host 127.0.0.1 --port 8080
 ```
 
 ### Benchmark folder expectations
 
 - Input artifacts are pytest-benchmark JSON files (`--benchmark-save` output) stored anywhere under a folder.
 - Reference selection uses explicit run id or tag metadata (`metadata.run_id`, `metadata.tag`, or fallback identifiers).
-- Default comparison baseline is latest vs second-latest run when `--reference` and `--candidate` are omitted.
+- Default comparison baseline is latest run (candidate) vs second-latest run (reference) when `--reference` and `--candidate` are both omitted.
+- When only `--candidate` is provided, the run immediately preceding it in the list is used as the reference.
 - Grouping defaults to: custom groups > benchmark group > marks > params.
 - Custom grouping tokens include `custom:<key>`, `group`, `marks`, `params`, and `param:<name>`.
+- Use `--distinct-param` to treat a parameter as a separate dimension rather than collapsing it during grouping.
 - Method normalization supports optional `--original-postfix` and `--reference-postfix` to align benchmark names across implementations.
+- Profiler artifacts can be linked via `--profiler-folder` (both `analyze` and `serve` subcommands).
 
 ### pytest-benchmark group stats override
 

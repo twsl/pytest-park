@@ -20,7 +20,7 @@ dynamic = [
     "version"
 ]
 dependencies = [
-    "rich>=13.0.0",
+    "rich>=14.3.3",
 ]
 
 [project.optional-dependencies]
