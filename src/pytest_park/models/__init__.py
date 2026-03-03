@@ -4,6 +4,7 @@ from pytest_park.models.benchmark import (
     BenchmarkRun,
     BenchmarkStats,
     GroupSummary,
+    MethodImprovement,
     TrendPoint,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "BenchmarkRun",
     "BenchmarkStats",
     "GroupSummary",
+    "MethodImprovement",
     "TrendPoint",
 ]

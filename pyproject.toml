@@ -20,11 +20,13 @@ dynamic = [
     "version"
 ]
 dependencies = [
-    "nicegui>=3.7.1",
+    "rich>=13.0.0",
 ]
 
-#[project.optional-dependencies]
-#extra = []
+[project.optional-dependencies]
+ui = [
+    "nicegui>=3.8.0",
+]
 
 [project.urls]
 homepage = "https://twsl.github.io/pytest-park/"

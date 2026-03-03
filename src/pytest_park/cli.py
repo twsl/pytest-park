@@ -4,18 +4,17 @@ import argparse
 from pathlib import Path
 import sys
 
+from rich.console import Console
+from rich.table import Table
+
 from pytest_park.__about__ import __version__
 from pytest_park.core import (
+    analyze_method_improvements,
     attach_profiler_data,
-    build_method_statistics,
-    build_overview_statistics,
-    compare_method_to_all_prior_runs,
-    compare_runs,
-    list_methods,
+    build_overall_improvement_summary,
     select_candidate_run,
     select_latest_and_previous_runs,
     select_reference_run,
-    summarize_groups,
 )
 from pytest_park.data import BenchmarkLoadError, ProfilerLoadError, load_benchmark_folder, load_profiler_folder
 from pytest_park.ui import serve_dashboard
@@ -48,16 +47,15 @@ def main(argv: list[str] | None = None) -> int:
             parser.error(str(exc))
         attach_profiler_data(runs, profiler_by_run)
 
-    if args.command == "load":
-        _cmd_load(runs)
-        return 0
-
     if args.command == "analyze":
-        _cmd_analyze(runs, args.grouping, args.distinct_param, args.method)
-        return 0
-
-    if args.command == "compare":
-        _cmd_compare(runs, args.reference, args.candidate, args.grouping, args.distinct_param, args.method)
+        _cmd_analyze(
+            runs,
+            args.reference,
+            args.candidate,
+            args.grouping,
+            args.distinct_param,
+            args.exclude_param,
+        )
         return 0
 
     if args.command == "serve":
@@ -97,28 +95,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional postfix used in reference method names (for name normalization)",
     )
 
-    load_parser = subparsers.add_parser("load", parents=[shared])
-    load_parser.set_defaults(command="load")
-
     analyze_parser = subparsers.add_parser("analyze", parents=[shared])
+    analyze_parser.add_argument("--reference", default=None, help="Reference run_id or tag (defaults to oldest run)")
+    analyze_parser.add_argument("--candidate", default=None, help="Candidate run_id or tag")
     analyze_parser.add_argument("--grouping", action="append", default=[], help="Grouping token, repeatable")
     analyze_parser.add_argument("--group-by", dest="grouping", action="append", help=argparse.SUPPRESS)
     analyze_parser.add_argument(
         "--distinct-param", action="append", default=[], help="Distinct parameter key, repeatable"
     )
-    analyze_parser.add_argument("--method", default=None, help="Optional method/benchmark name for details")
-    analyze_parser.set_defaults(command="analyze")
-
-    compare_parser = subparsers.add_parser("compare", parents=[shared])
-    compare_parser.add_argument("--reference", default=None, help="Reference run_id or tag (defaults to oldest run)")
-    compare_parser.add_argument("--candidate", default=None, help="Candidate run_id or tag")
-    compare_parser.add_argument("--grouping", action="append", default=[], help="Grouping token, repeatable")
-    compare_parser.add_argument("--group-by", dest="grouping", action="append", help=argparse.SUPPRESS)
-    compare_parser.add_argument(
-        "--distinct-param", action="append", default=[], help="Distinct parameter key, repeatable"
+    analyze_parser.add_argument(
+        "--exclude-param", action="append", default=[], help="Parameter key to exclude from comparison, repeatable"
     )
-    compare_parser.add_argument("--method", default=None, help="Optional method/benchmark name for details")
-    compare_parser.set_defaults(command="compare")
+    analyze_parser.set_defaults(command="analyze")
 
     serve_parser = subparsers.add_parser("serve", parents=[shared])
     serve_parser.add_argument("--reference", default=None, help="Default reference run_id or tag")
@@ -135,83 +123,90 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _cmd_load(runs) -> None:
-    case_count = sum(len(run.cases) for run in runs)
-    print(f"Loaded {len(runs)} runs and {case_count} benchmark cases")
-    for run in runs:
-        print(f"- {run.run_id} ({len(run.cases)} cases) from {run.source_file}")
-
-
-def _cmd_analyze(runs, grouping: list[str], distinct_params: list[str], method: str | None) -> None:
-    reference_run, candidate_run = select_latest_and_previous_runs(runs)
-    deltas = compare_runs(reference_run, candidate_run, grouping or None, distinct_params or None)
-    _print_overview(deltas, reference_run.run_id, candidate_run.run_id)
-
-    methods_to_inspect = [method] if method else list_methods(runs)
-    for m in methods_to_inspect:
-        _print_method_details(runs, reference_run, candidate_run, deltas, m, distinct_params)
-
-
-def _cmd_compare(
+def _cmd_analyze(
     runs,
     reference: str | None,
     candidate: str | None,
     grouping: list[str],
     distinct_params: list[str],
-    method: str | None,
+    exclude_params: list[str],
 ) -> None:
     if reference is None and candidate is None:
         reference_run, candidate_run = select_latest_and_previous_runs(runs)
     elif candidate and reference is None:
         candidate_run = select_reference_run(runs, candidate)
-        reference_run = _select_previous_run(runs, candidate_run)
+        try:
+            reference_run = _select_previous_run(runs, candidate_run)
+        except ValueError:
+            reference_run = None
     else:
         reference_run = select_reference_run(runs, reference) if reference else select_latest_and_previous_runs(runs)[0]
         candidate_run = select_candidate_run(runs, candidate, reference_run)
 
-    deltas = compare_runs(reference_run, candidate_run, grouping or None, distinct_params or None)
-    _print_overview(deltas, reference_run.run_id, candidate_run.run_id)
-
-    methods_to_inspect = [method] if method else list_methods(runs)
-    for m in methods_to_inspect:
-        _print_method_details(runs, reference_run, candidate_run, deltas, m, distinct_params)
-
-
-def _print_overview(deltas, reference_id: str, candidate_id: str) -> None:
-    summaries = summarize_groups(deltas)
-    overview = build_overview_statistics(deltas)
-
-    print(f"Compared run {candidate_id} against reference {reference_id}")
-    print(
-        "Accumulated: "
-        f"count={overview['count']}, avg_delta={overview['avg_delta_pct']:.2f}%, "
-        f"median_delta={overview['median_delta_pct']:.2f}%, avg_speedup={overview['avg_speedup']:.3f}, "
-        f"improved={overview['improved']}, regressed={overview['regressed']}, unchanged={overview['unchanged']}"
+    improvements = analyze_method_improvements(
+        candidate_run=candidate_run,
+        reference_run=reference_run,
+        group_by=grouping or None,
+        exclude_params=exclude_params or None,
     )
-    for summary in summaries:
-        print(
-            f"- {summary.label}: count={summary.count}, avg_delta={summary.average_delta_pct:.2f}%, "
-            f"median_delta={summary.median_delta_pct:.2f}%, improved={summary.improvements}, regressed={summary.regressions}"
+
+    console = Console(width=200 if not sys.stdout.isatty() else None)
+    table = Table(title=f"Benchmark Analysis (Candidate: {candidate_run.run_id})", expand=True)
+
+    table.add_column("Group", style="cyan")
+    table.add_column("Method", style="magenta")
+    table.add_column("Avg vs Orig (Time)", justify="right")
+    table.add_column("Avg vs Orig (%)", justify="right")
+    table.add_column("Med vs Orig (Time)", justify="right")
+    table.add_column("Med vs Orig (%)", justify="right")
+    table.add_column("Avg vs Prev (Time)", justify="right")
+    table.add_column("Avg vs Prev (%)", justify="right")
+    table.add_column("Med vs Prev (Time)", justify="right")
+    table.add_column("Med vs Prev (%)", justify="right")
+
+    def format_val(val: float | None, is_pct: bool = False) -> str:
+        if val is None:
+            return "N/A"
+        color = "green" if val > 0 else "red" if val < 0 else "white"
+        suffix = "%" if is_pct else "s"
+        return f"[{color}]{val:+.4f}{suffix}[/{color}]"
+
+    for imp in improvements:
+        table.add_row(
+            imp.group,
+            imp.method,
+            format_val(imp.avg_vs_orig_time),
+            format_val(imp.avg_vs_orig_pct, is_pct=True),
+            format_val(imp.med_vs_orig_time),
+            format_val(imp.med_vs_orig_pct, is_pct=True),
+            format_val(imp.avg_vs_prev_time),
+            format_val(imp.avg_vs_prev_pct, is_pct=True),
+            format_val(imp.med_vs_prev_time),
+            format_val(imp.med_vs_prev_pct, is_pct=True),
         )
 
+    if improvements:
+        summary = build_overall_improvement_summary(improvements)
 
-def _print_method_details(runs, reference_run, candidate_run, deltas, method: str, distinct_params: list[str]) -> None:
-    method_stats = build_method_statistics(deltas, method)
-    if not method_stats:
-        print(f"No matching method data found for: {method}")
-        return
+        def _sv(key: str, is_pct: bool = False) -> str:
+            return format_val(summary.get(key), is_pct=is_pct)  # type: ignore[arg-type]
 
-    print(
-        f"Method {method}: count={method_stats['count']}, avg_delta={method_stats['avg_delta_pct']:.2f}%, "
-        f"median_delta={method_stats['median_delta_pct']:.2f}%, avg_speedup={method_stats['avg_speedup']:.3f}"
-    )
-    history = compare_method_to_all_prior_runs(runs, candidate_run, method, distinct_params or None)
-    for item in history:
-        print(
-            f"  current={item['candidate_run_id']} vs={item['reference_run_id']} distinct={item['distinct']} "
-            f"mean={float(item['mean']):.6f} vs_ref={float(item['reference_mean']):.6f} "
-            f"delta={float(item['delta_pct']):.2f}%"
+        table.add_section()
+        table.add_row(
+            "Overall",
+            "All Methods",
+            _sv("avg_vs_orig_time"),
+            _sv("avg_vs_orig_pct", is_pct=True),
+            _sv("med_vs_orig_time"),
+            _sv("med_vs_orig_pct", is_pct=True),
+            _sv("avg_vs_prev_time"),
+            _sv("avg_vs_prev_pct", is_pct=True),
+            _sv("med_vs_prev_time"),
+            _sv("med_vs_prev_pct", is_pct=True),
+            style="bold",
         )
+
+    console.print(table)
 
 
 def _select_previous_run(runs, candidate_run):
@@ -231,24 +226,18 @@ def _run_interactive(parser: argparse.ArgumentParser) -> int:
 
     print("pytest-park interactive mode")
     print("1) analyze")
-    print("2) compare")
-    print("3) serve (quick defaults)")
-    print("4) serve (custom options)")
-    print("5) load")
-    print("6) version")
+    print("2) serve")
+    print("3) version")
 
     try:
-        selection = input("Choose command [1-6]: ").strip()
+        selection = input("Choose command [1-3]: ").strip()
     except EOFError:
         return 1
 
     command_map = {
         "1": "analyze",
-        "2": "compare",
-        "3": "serve_quick",
-        "4": "serve",
-        "5": "load",
-        "6": "version",
+        "2": "serve",
+        "3": "version",
     }
     command = command_map.get(selection)
     if command is None:
@@ -263,12 +252,9 @@ def _run_interactive(parser: argparse.ArgumentParser) -> int:
     except EOFError:
         return 1
 
-    if command == "serve_quick":
-        return main(["serve", benchmark_folder])
-
     command_args: list[str] = [command, benchmark_folder]
 
-    if command in {"analyze", "compare", "serve"}:
+    if command in {"analyze", "serve"}:
         group_by = _read_csv_prompt("Group-by tokens (comma separated, optional): ")
         for token in group_by:
             command_args.extend(["--grouping", token])
@@ -277,12 +263,19 @@ def _run_interactive(parser: argparse.ArgumentParser) -> int:
         for token in distinct:
             command_args.extend(["--distinct-param", token])
 
-    if command in {"analyze", "compare"}:
-        method = _read_optional_prompt("Method (optional): ")
-        if method:
-            command_args.extend(["--method", method])
+        orig_postfix = _read_optional_prompt("Original postfix (optional): ")
+        if orig_postfix:
+            command_args.extend(["--original-postfix", orig_postfix])
 
-    if command == "compare":
+        ref_postfix = _read_optional_prompt("Reference postfix (optional): ")
+        if ref_postfix:
+            command_args.extend(["--reference-postfix", ref_postfix])
+
+    if command == "analyze":
+        exclude = _read_csv_prompt("Exclude params (comma separated, optional): ")
+        for token in exclude:
+            command_args.extend(["--exclude-param", token])
+
         reference = _read_optional_prompt("Reference run/tag (optional): ")
         if reference:
             command_args.extend(["--reference", reference])

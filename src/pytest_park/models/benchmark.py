@@ -95,3 +95,19 @@ class TrendPoint:
     run_id: str
     timestamp: datetime | None
     mean: float
+
+
+@dataclass(slots=True)
+class MethodImprovement:
+    """Aggregated improvement metrics for a method within a group."""
+
+    group: str
+    method: str
+    avg_vs_orig_time: float | None
+    avg_vs_orig_pct: float | None
+    med_vs_orig_time: float | None
+    med_vs_orig_pct: float | None
+    avg_vs_prev_time: float | None
+    avg_vs_prev_pct: float | None
+    med_vs_prev_time: float | None
+    med_vs_prev_pct: float | None

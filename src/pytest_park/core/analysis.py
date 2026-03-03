@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from statistics import median
 
-from pytest_park.models import BenchmarkCase, BenchmarkDelta, BenchmarkRun, GroupSummary, TrendPoint
+from pytest_park.models import BenchmarkCase, BenchmarkDelta, BenchmarkRun, GroupSummary, MethodImprovement, TrendPoint
 
 DEFAULT_GROUPING_PRECEDENCE = ("custom", "benchmark_group", "marks", "params")
 _IGNORED_COMPARISON_PARAMS = {"implementation", "impl", "variant"}
@@ -296,6 +296,158 @@ def compare_method_to_all_prior_runs(
     return compared
 
 
+def analyze_method_improvements(
+    candidate_run: BenchmarkRun,
+    reference_run: BenchmarkRun | None = None,
+    group_by: list[str] | None = None,
+    exclude_params: list[str] | None = None,
+) -> list[MethodImprovement]:
+    """Calculate average and median improvements per method vs original and previous run."""
+    improvements: list[MethodImprovement] = []
+
+    grouped_cand: dict[str, dict[str, dict[str, dict[str, list[float]]]]] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    )
+
+    for case in candidate_run.cases:
+        group_label = build_group_label(case, group_by)
+        match_label = _match_label(case, exclude_params)
+        role = _implementation_role(case)
+
+        excluded_param_values = {k: v for k, v in case.params.items() if k in (exclude_params or [])}
+        if excluded_param_values:
+            suffix = ",".join(f"{k}={v}" for k, v in sorted(excluded_param_values.items()))
+            method_name = f"{case.base_name}[{suffix}]"
+        else:
+            method_name = case.base_name
+
+        grouped_cand[group_label][method_name][match_label][role].append(case.stats.mean)
+
+    grouped_ref: dict[str, dict[str, dict[str, dict[str, list[float]]]]] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    )
+    if reference_run:
+        for case in reference_run.cases:
+            group_label = build_group_label(case, group_by)
+            match_label = _match_label(case, exclude_params)
+            role = _implementation_role(case)
+
+            excluded_param_values = {k: v for k, v in case.params.items() if k in (exclude_params or [])}
+            if excluded_param_values:
+                suffix = ",".join(f"{k}={v}" for k, v in sorted(excluded_param_values.items()))
+                method_name = f"{case.base_name}[{suffix}]"
+            else:
+                method_name = case.base_name
+
+            grouped_ref[group_label][method_name][match_label][role].append(case.stats.mean)
+
+    for group_label, methods in grouped_cand.items():
+        for base_name, matches in methods.items():
+            all_roles = set()
+            for roles in matches.values():
+                all_roles.update(roles.keys())
+
+            if "new" in all_roles:
+                primary_role = "new"
+            elif "unknown" in all_roles:
+                primary_role = "unknown"
+            elif "original" in all_roles:
+                primary_role = "original"
+            else:
+                continue
+
+            vs_orig_time_diffs = []
+            vs_orig_pct_diffs = []
+            vs_prev_time_diffs = []
+            vs_prev_pct_diffs = []
+
+            for match_label, roles in matches.items():
+                cand_means = roles.get(primary_role)
+                if not cand_means:
+                    continue
+                cand_mean = sum(cand_means) / len(cand_means)
+
+                orig_means = roles.get("original")
+                if orig_means and primary_role != "original":
+                    orig_mean = sum(orig_means) / len(orig_means)
+                    time_diff = orig_mean - cand_mean
+                    pct_diff = (time_diff / orig_mean) * 100.0 if orig_mean > 0 else 0.0
+                    vs_orig_time_diffs.append(time_diff)
+                    vs_orig_pct_diffs.append(pct_diff)
+
+                if reference_run:
+                    ref_roles = grouped_ref.get(group_label, {}).get(base_name, {}).get(match_label, {})
+                    ref_means = ref_roles.get(primary_role)
+                    if ref_means:
+                        ref_mean = sum(ref_means) / len(ref_means)
+                        time_diff = ref_mean - cand_mean
+                        pct_diff = (time_diff / ref_mean) * 100.0 if ref_mean > 0 else 0.0
+                        vs_prev_time_diffs.append(time_diff)
+                        vs_prev_pct_diffs.append(pct_diff)
+
+            improvements.append(
+                MethodImprovement(
+                    group=group_label,
+                    method=base_name,
+                    avg_vs_orig_time=sum(vs_orig_time_diffs) / len(vs_orig_time_diffs) if vs_orig_time_diffs else None,
+                    avg_vs_orig_pct=sum(vs_orig_pct_diffs) / len(vs_orig_pct_diffs) if vs_orig_pct_diffs else None,
+                    med_vs_orig_time=median(vs_orig_time_diffs) if vs_orig_time_diffs else None,
+                    med_vs_orig_pct=median(vs_orig_pct_diffs) if vs_orig_pct_diffs else None,
+                    avg_vs_prev_time=sum(vs_prev_time_diffs) / len(vs_prev_time_diffs) if vs_prev_time_diffs else None,
+                    avg_vs_prev_pct=sum(vs_prev_pct_diffs) / len(vs_prev_pct_diffs) if vs_prev_pct_diffs else None,
+                    med_vs_prev_time=median(vs_prev_time_diffs) if vs_prev_time_diffs else None,
+                    med_vs_prev_pct=median(vs_prev_pct_diffs) if vs_prev_pct_diffs else None,
+                )
+            )
+
+    improvements.sort(key=lambda item: (item.group, item.method))
+    return improvements
+
+
+def build_overall_improvement_summary(improvements: list[MethodImprovement]) -> dict[str, float | int | None]:
+    """Compute overall aggregated improvement metrics across all methods and devices.
+
+    Aggregates the per-method/per-device entries returned by :func:`analyze_method_improvements`
+    into a single summary covering:
+
+    * ``vs_orig`` columns – new implementation vs original within the same run.
+    * ``vs_prev`` columns – new implementation in the candidate run vs the reference run.
+    """
+    if not improvements:
+        return {
+            "count": 0,
+            "avg_vs_orig_time": None,
+            "avg_vs_orig_pct": None,
+            "med_vs_orig_time": None,
+            "med_vs_orig_pct": None,
+            "avg_vs_prev_time": None,
+            "avg_vs_prev_pct": None,
+            "med_vs_prev_time": None,
+            "med_vs_prev_pct": None,
+        }
+
+    avg_orig_times = [imp.avg_vs_orig_time for imp in improvements if imp.avg_vs_orig_time is not None]
+    avg_orig_pcts = [imp.avg_vs_orig_pct for imp in improvements if imp.avg_vs_orig_pct is not None]
+    med_orig_times = [imp.med_vs_orig_time for imp in improvements if imp.med_vs_orig_time is not None]
+    med_orig_pcts = [imp.med_vs_orig_pct for imp in improvements if imp.med_vs_orig_pct is not None]
+    avg_prev_times = [imp.avg_vs_prev_time for imp in improvements if imp.avg_vs_prev_time is not None]
+    avg_prev_pcts = [imp.avg_vs_prev_pct for imp in improvements if imp.avg_vs_prev_pct is not None]
+    med_prev_times = [imp.med_vs_prev_time for imp in improvements if imp.med_vs_prev_time is not None]
+    med_prev_pcts = [imp.med_vs_prev_pct for imp in improvements if imp.med_vs_prev_pct is not None]
+
+    return {
+        "count": len(improvements),
+        "avg_vs_orig_time": sum(avg_orig_times) / len(avg_orig_times) if avg_orig_times else None,
+        "avg_vs_orig_pct": sum(avg_orig_pcts) / len(avg_orig_pcts) if avg_orig_pcts else None,
+        "med_vs_orig_time": median(med_orig_times) if med_orig_times else None,
+        "med_vs_orig_pct": median(med_orig_pcts) if med_orig_pcts else None,
+        "avg_vs_prev_time": sum(avg_prev_times) / len(avg_prev_times) if avg_prev_times else None,
+        "avg_vs_prev_pct": sum(avg_prev_pcts) / len(avg_prev_pcts) if avg_prev_pcts else None,
+        "med_vs_prev_time": median(med_prev_times) if med_prev_times else None,
+        "med_vs_prev_pct": median(med_prev_pcts) if med_prev_pcts else None,
+    }
+
+
 def build_method_group_split_bars(run: BenchmarkRun) -> dict[str, list[dict[str, float | str]]]:
     """Build split-bar chart rows per method base name for original/new roles."""
     grouped: dict[str, dict[str, dict[str, list[float]]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
@@ -403,8 +555,7 @@ def _comparison_key(case: BenchmarkCase, distinct_params: list[str] | None) -> s
             key: value for key, value in case.params.items() if key.lower() not in _IGNORED_COMPARISON_PARAMS
         }
     param_bits = ",".join(f"{key}={value}" for key, value in sorted(comparable_params.items()))
-    implementation_role = _implementation_role(case)
-    return f"{case.normalized_fullname}|{param_bits}|role={implementation_role}"
+    return f"{case.normalized_fullname}|{param_bits}"
 
 
 def _distinct_label(case: BenchmarkCase, distinct_params: list[str] | None) -> str:
@@ -436,16 +587,23 @@ def _method_mean_index(
 
 
 def _implementation_role(case: BenchmarkCase) -> str:
-    if not case.method_postfix:
-        return "unknown"
+    # First try the method postfix (e.g., method_new, method_original)
+    if case.method_postfix:
+        normalized = case.method_postfix.strip().lower().replace("-", "_").lstrip("_")
+        if any(token in normalized for token in ("orig", "old", "baseline", "reference", "ref")):
+            return "original"
+        if any(token in normalized for token in ("new", "candidate", "cand")):
+            return "new"
 
-    normalized = case.method_postfix.strip().lower().replace("-", "_")
-    normalized = normalized.lstrip("_")
-
-    if any(token in normalized for token in ("orig", "old", "baseline", "reference", "ref")):
-        return "original"
-    if any(token in normalized for token in ("new", "candidate", "cand")):
-        return "new"
+    # Fall back to implementation-related params (e.g., implementation=new, impl=original)
+    for param_key in _IGNORED_COMPARISON_PARAMS:
+        value = case.params.get(param_key)
+        if value is not None:
+            norm_val = value.strip().lower().replace("-", "_")
+            if any(token in norm_val for token in ("orig", "old", "baseline", "reference", "ref")):
+                return "original"
+            if any(token in norm_val for token in ("new", "candidate", "cand")):
+                return "new"
     return "unknown"
 
 
@@ -453,6 +611,14 @@ def _argument_label(case: BenchmarkCase) -> str:
     comparable_params = {
         key: value for key, value in case.params.items() if key.lower() not in _IGNORED_COMPARISON_PARAMS
     }
+    if not comparable_params:
+        return "all"
+    return ",".join(f"{key}={value}" for key, value in sorted(comparable_params.items()))
+
+
+def _match_label(case: BenchmarkCase, exclude_params: list[str] | None) -> str:
+    exclude = set(exclude_params or []) | _IGNORED_COMPARISON_PARAMS
+    comparable_params = {key: value for key, value in case.params.items() if key.lower() not in exclude}
     if not comparable_params:
         return "all"
     return ",".join(f"{key}={value}" for key, value in sorted(comparable_params.items()))

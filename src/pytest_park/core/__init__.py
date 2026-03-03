@@ -1,10 +1,12 @@
 from pytest_park.core.analysis import (
     DEFAULT_GROUPING_PRECEDENCE,
+    analyze_method_improvements,
     attach_profiler_data,
     build_group_label,
     build_method_group_split_bars,
     build_method_history,
     build_method_statistics,
+    build_overall_improvement_summary,
     build_overview_statistics,
     build_trends,
     compare_method_history_to_reference,
@@ -19,11 +21,13 @@ from pytest_park.core.analysis import (
 
 __all__ = [
     "DEFAULT_GROUPING_PRECEDENCE",
+    "analyze_method_improvements",
     "attach_profiler_data",
     "build_method_group_split_bars",
     "build_group_label",
     "build_method_history",
     "build_method_statistics",
+    "build_overall_improvement_summary",
     "build_overview_statistics",
     "build_trends",
     "compare_method_history_to_reference",

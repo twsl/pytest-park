@@ -224,7 +224,7 @@ pytest tests/ --benchmark-only --benchmark-save=optimized_v1 --benchmark-save-da
 #### Quick Comparison (Latest vs Previous)
 
 ```bash
-pytest-park compare ./.benchmarks
+pytest-park analyze ./.benchmarks
 ```
 
 By default, this will compare and print details for all methods without prompting.
@@ -232,59 +232,43 @@ By default, this will compare and print details for all methods without promptin
 **Output**:
 
 ```
-Compared run optimized_v1 against reference baseline
-Accumulated: count=2, avg_delta=-50.0%, median_delta=-50.0%, avg_speedup=2.0, improved=2, regressed=0, unchanged=0
-Method test_process_data: count=2, avg_delta=-50.0%, median_delta=-50.0%, avg_speedup=2.0
-  current=optimized_v1 vs=baseline distinct= mean=0.050000 vs_ref=0.100000 delta=-50.00%
+        Benchmark Analysis (Candidate: 2026-02-18T23:49:28.042400+00:00)
+┏━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━┳━━━━━━━┓
+┃       ┃       ┃   Avg ┃   Avg ┃   Med ┃   Med ┃   Avg ┃   Avg ┃  Med ┃   Med ┃
+┃       ┃       ┃    vs ┃    vs ┃    vs ┃    vs ┃    vs ┃    vs ┃   vs ┃    vs ┃
+┃       ┃       ┃  Orig ┃  Orig ┃  Orig ┃  Orig ┃  Prev ┃  Prev ┃ Prev ┃  Prev ┃
+┃ Group ┃ Meth… ┃ (Tim… ┃   (%) ┃ (Tim… ┃   (%) ┃ (Tim… ┃   (%) ┃ (Ti… ┃   (%) ┃
+┡━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━╇━━━━━━━┩
+│ cust… │ test… │   N/A │   N/A │   N/A │   N/A │ +0.0… │ +0.0… │ +0.… │ +0.0… │
+│ cust… │ test… │   N/A │   N/A │   N/A │   N/A │ +0.0… │ +0.0… │ +0.… │ +0.0… │
+└───────┴───────┴───────┴───────┴───────┴───────┴───────┴───────┴──────┴───────┘
 ```
 
 #### Explicit Run Selection
 
 ```bash
-pytest-park compare ./.benchmarks --reference baseline --candidate optimized_v1
+pytest-park analyze ./.benchmarks --reference baseline --candidate optimized_v1
 ```
 
 #### Group by Base Method
 
 ```bash
-pytest-park compare ./.benchmarks --reference baseline --candidate optimized_v1 --group-by group
-```
-
-**Output**:
-
-```
-Compared run optimized_v1 against reference baseline
-Accumulated: count=2, avg_delta=-50.0%, median_delta=-50.0%, avg_speedup=2.0, improved=2, regressed=0, unchanged=0
-- test_process_data: count=2, avg_delta=-50.0%, median_delta=-50.0%, improved=2, regressed=0
+pytest-park analyze ./.benchmarks --reference baseline --candidate optimized_v1 --group-by group
 ```
 
 #### Group by Optimization Technique
 
 ```bash
-pytest-park compare ./.benchmarks --reference baseline --candidate optimized_v1 --group-by custom:technique
+pytest-park analyze ./.benchmarks --reference baseline --candidate optimized_v1 --group-by custom:technique
 ```
 
-**Output**:
-
-```
-- technique=vectorization: count=2, avg_delta=-50.0%, improved=2, regressed=0
-```
-
-### Step 8: Detailed Method Analysis
-
-Focus on specific methods:
+#### Exclude Parameters
 
 ```bash
-pytest-park compare ./.benchmarks --reference baseline --candidate optimized_v1 --method test_process_data
+pytest-park analyze ./.benchmarks --exclude-param device
 ```
 
-**Output shows**:
-
-- Historical performance across all runs
-- Per-variant statistics
-- Comparative analysis
-
-### Step 9: Interactive Dashboard
+### Step 8: Interactive Dashboard
 
 For exploratory analysis:
 
@@ -320,23 +304,7 @@ pytest-park load ./.benchmarks
 Compare latest vs second-latest run with grouping analysis.
 
 ```bash
-pytest-park analyze ./.benchmarks --group-by group --group-by param:device --method test_func1
-```
-
-**Options**:
-
-- `--group-by <token>` - Grouping strategy (repeatable)
-- `--method <name>` - Focus on specific method (if omitted, compares all methods)
-- `--distinct-param <key>` - Treat parameter as distinct (don't merge)
-- `--original-postfix <str>` - Configure name parsing
-- `--reference-postfix <str>` - Configure name parsing
-
-### `pytest-park compare <folder>`
-
-Compare specific runs with explicit selection.
-
-```bash
-pytest-park compare ./.benchmarks --reference baseline --candidate v2.0 --group-by custom:technique
+pytest-park analyze ./.benchmarks --group-by group --group-by param:device --exclude-param device
 ```
 
 **Options**:
@@ -344,8 +312,8 @@ pytest-park compare ./.benchmarks --reference baseline --candidate v2.0 --group-
 - `--reference <id|tag>` - Reference run (defaults to oldest if only candidate specified)
 - `--candidate <id|tag>` - Candidate run (defaults to latest if only reference specified)
 - `--group-by <token>` - Grouping strategy (repeatable)
-- `--method <name>` - Focus on specific method (if omitted, compares all methods)
-- `--distinct-param <key>` - Treat parameter as distinct
+- `--distinct-param <key>` - Treat parameter as distinct (don't merge)
+- `--exclude-param <key>` - Parameter key to exclude from comparison (repeatable)
 - `--original-postfix <str>` - Configure name parsing
 - `--reference-postfix <str>` - Configure name parsing
 
