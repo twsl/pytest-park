@@ -120,9 +120,9 @@ def test_postfix_roles_per_device_vs_orig(postfix_role_folder) -> None:
     cpu_imp = next(imp for imp in improvements if imp.method == "func1[device=cpu]")
     gpu_imp = next(imp for imp in improvements if imp.method == "func1[device=gpu]")
 
-    assert cpu_imp.avg_vs_orig_time == pytest.approx(1.0)         # 3.0 - 2.0
+    assert cpu_imp.avg_vs_orig_time == pytest.approx(1.0)  # 3.0 - 2.0
     assert cpu_imp.avg_vs_orig_pct == pytest.approx(100.0 / 3.0)  # 33.33 %
-    assert gpu_imp.avg_vs_orig_time == pytest.approx(2.0)         # 6.0 - 4.0
+    assert gpu_imp.avg_vs_orig_time == pytest.approx(2.0)  # 6.0 - 4.0
     assert gpu_imp.avg_vs_orig_pct == pytest.approx(100.0 / 3.0)  # 33.33 %
 
     assert cpu_imp.avg_vs_prev_time is None
@@ -173,10 +173,10 @@ def test_param_roles_per_device_vs_orig(param_role_folder) -> None:
     imp_f1_gpu = next(imp for imp in improvements if imp.method == "func1[device=gpu]")
     imp_f2_cpu = next(imp for imp in improvements if imp.method == "func2[device=cpu]")
 
-    assert imp_f1_cpu.avg_vs_orig_time == pytest.approx(1.0)   # 3.0 - 2.0
-    assert imp_f1_gpu.avg_vs_orig_time == pytest.approx(2.0)   # 6.0 - 4.0
-    assert imp_f2_cpu.avg_vs_orig_time == pytest.approx(2.0)   # 5.0 - 3.0
-    assert imp_f2_cpu.avg_vs_orig_pct == pytest.approx(40.0)   # 2/5 * 100
+    assert imp_f1_cpu.avg_vs_orig_time == pytest.approx(1.0)  # 3.0 - 2.0
+    assert imp_f1_gpu.avg_vs_orig_time == pytest.approx(2.0)  # 6.0 - 4.0
+    assert imp_f2_cpu.avg_vs_orig_time == pytest.approx(2.0)  # 5.0 - 3.0
+    assert imp_f2_cpu.avg_vs_orig_pct == pytest.approx(40.0)  # 2/5 * 100
 
 
 def test_param_roles_vs_reference_run(param_role_folder) -> None:
