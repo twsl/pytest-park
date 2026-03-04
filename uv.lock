@@ -2030,7 +2030,7 @@ dev = [
     { name = "copier", specifier = ">=9.12.0" },
     { name = "prek", specifier = ">=0.3.4" },
     { name = "ruff", specifier = ">=0.15.4" },
-    { name = "ty", specifier = ">=0.0.19" },
+    { name = "ty", specifier = ">=0.0.20" },
     { name = "vulture", specifier = ">=2.14" },
 ]
 docs = [
@@ -2040,7 +2040,7 @@ docs = [
     { name = "mkdocs-awesome-nav", specifier = ">=3.3.0" },
     { name = "mkdocs-git-authors-plugin", specifier = ">=0.10.0" },
     { name = "mkdocs-git-revision-date-localized-plugin", specifier = ">=1.5.1" },
-    { name = "mkdocs-material", specifier = ">=9.7.3" },
+    { name = "mkdocs-material", specifier = ">=9.7.4" },
     { name = "pygments", specifier = ">=2.19.0" },
     { name = "pymdown-extensions", specifier = ">=10.21" },
 ]
