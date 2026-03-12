@@ -1,6 +1,5 @@
 # pytest-park
 
-
 [![Build](https://github.com/twsl/pytest-park/actions/workflows/build.yaml/badge.svg)](https://github.com/twsl/pytest-park/actions/workflows/build.yaml)
 [![Documentation](https://github.com/twsl/pytest-park/actions/workflows/docs.yaml/badge.svg)](https://github.com/twsl/pytest-park/actions/workflows/docs.yaml)
 [![PyPI - Package Version](https://img.shields.io/pypi/v/pytest-park?logo=pypi&style=flat&color=orange)](https://pypi.org/project/pytest-park/)
@@ -15,9 +14,7 @@
 [![Copier](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/copier-org/copier/master/img/badge/badge-grayscale-border.json)](https://github.com/copier-org/copier)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-
 Organise and analyse your pytest benchmarks
-
 
 ## Features
 
@@ -27,19 +24,19 @@ Organise and analyse your pytest benchmarks
 - Associate optional profiler artifacts with benchmark runs for code-level analysis context.
 - Serve an interactive local NiceGUI dashboard for exploratory benchmark comparison.
 
-
 ## Installation
 
 With `pip`:
+
 ```bash
 python -m pip install pytest-park
 ```
 
 With [`uv`](https://docs.astral.sh/uv/):
+
 ```bash
 uv add --group test pytest-park
 ```
-
 
 ## How to use it
 
@@ -85,7 +82,7 @@ pytest-park serve ./.benchmarks --profiler-folder ./.profiler --host 127.0.0.1 -
 - Default comparison baseline is latest run (candidate) vs second-latest run (reference) when `--reference` and `--candidate` are both omitted.
 - When only `--candidate` is provided, the run immediately preceding it in the list is used as the reference.
 - Grouping defaults to: custom groups > benchmark group > marks > params.
-- Custom grouping tokens include `custom:<key>`, `group`, `marks`, `params`, and `param:<name>`.
+- Grouping tokens for `--group-by` (alias for `--grouping`): `custom:<key>`, `custom` (all custom keys), `group` / `benchmark_group`, `mark` / `marks`, `params`, `param:<name>`, `name` / `method`, `fullname` / `nodeid`.
 - Use `--distinct-param` to treat a parameter as a separate dimension rather than collapsing it during grouping.
 - Method normalization supports optional `--original-postfix` and `--reference-postfix` to align benchmark names across implementations.
 - Profiler artifacts can be linked via `--profiler-folder` (both `analyze` and `serve` subcommands).
@@ -125,13 +122,11 @@ def pytest_addoption(parser):
 	parser.addoption("--benchmark-reference-postfix", action="store", default="")
 ```
 
-
 ## Docs
 
 ```bash
 uv run mkdocs build -f ./mkdocs.yml -d ./_build/
 ```
-
 
 ## Update template
 
