@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+pytest_plugins = ["pytest_park.pytest_plugin"]
+
 
 def _make_benchmark_case(
     name: str,

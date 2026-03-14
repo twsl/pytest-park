@@ -4,19 +4,16 @@ import argparse
 from pathlib import Path
 import sys
 
-from rich.console import Console
-from rich.table import Table
-
 from pytest_park.__about__ import __version__
 from pytest_park.core import (
     analyze_method_improvements,
     attach_profiler_data,
-    build_overall_improvement_summary,
     select_candidate_run,
     select_latest_and_previous_runs,
     select_reference_run,
 )
 from pytest_park.data import BenchmarkLoadError, ProfilerLoadError, load_benchmark_folder, load_profiler_folder
+from pytest_park.reporting import build_analysis_tables, build_benchmark_header_label
 from pytest_park.ui import serve_dashboard
 
 
@@ -150,63 +147,15 @@ def _cmd_analyze(
         exclude_params=exclude_params or None,
     )
 
-    console = Console(width=200 if not sys.stdout.isatty() else None)
-    table = Table(title=f"Benchmark Analysis (Candidate: {candidate_run.run_id})", expand=True)
-
-    table.add_column("Group", style="cyan")
-    table.add_column("Method", style="magenta")
-    table.add_column("Avg vs Orig (Time)", justify="right")
-    table.add_column("Avg vs Orig (%)", justify="right")
-    table.add_column("Med vs Orig (Time)", justify="right")
-    table.add_column("Med vs Orig (%)", justify="right")
-    table.add_column("Avg vs Prev (Time)", justify="right")
-    table.add_column("Avg vs Prev (%)", justify="right")
-    table.add_column("Med vs Prev (Time)", justify="right")
-    table.add_column("Med vs Prev (%)", justify="right")
-
-    def format_val(val: float | None, is_pct: bool = False) -> str:
-        if val is None:
-            return "N/A"
-        color = "green" if val > 0 else "red" if val < 0 else "white"
-        suffix = "%" if is_pct else "s"
-        return f"[{color}]{val:+.4f}{suffix}[/{color}]"
-
-    for imp in improvements:
-        table.add_row(
-            imp.group,
-            imp.method,
-            format_val(imp.avg_vs_orig_time),
-            format_val(imp.avg_vs_orig_pct, is_pct=True),
-            format_val(imp.med_vs_orig_time),
-            format_val(imp.med_vs_orig_pct, is_pct=True),
-            format_val(imp.avg_vs_prev_time),
-            format_val(imp.avg_vs_prev_pct, is_pct=True),
-            format_val(imp.med_vs_prev_time),
-            format_val(imp.med_vs_prev_pct, is_pct=True),
-        )
-
-    if improvements:
-        summary = build_overall_improvement_summary(improvements)
-
-        def _sv(key: str, is_pct: bool = False) -> str:
-            return format_val(summary.get(key), is_pct=is_pct)  # type: ignore[arg-type]
-
-        table.add_section()
-        table.add_row(
-            "Overall",
-            "All Methods",
-            _sv("avg_vs_orig_time"),
-            _sv("avg_vs_orig_pct", is_pct=True),
-            _sv("med_vs_orig_time"),
-            _sv("med_vs_orig_pct", is_pct=True),
-            _sv("avg_vs_prev_time"),
-            _sv("avg_vs_prev_pct", is_pct=True),
-            _sv("med_vs_prev_time"),
-            _sv("med_vs_prev_pct", is_pct=True),
-            style="bold",
-        )
-
-    console.print(table)
+    for table in build_analysis_tables(
+        improvements,
+        candidate_run.run_id,
+        current_benchmark_header=build_benchmark_header_label(candidate_run.source_file, candidate_run.run_id),
+        comparison_benchmark_header=(
+            build_benchmark_header_label(reference_run.source_file, reference_run.run_id) if reference_run else None
+        ),
+    ):
+        print(table)
 
 
 def _select_previous_run(runs, candidate_run):

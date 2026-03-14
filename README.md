@@ -40,12 +40,19 @@ uv add --group test pytest-park
 
 ## How to use it
 
+### Recommended default workflow
+
+For most projects, the recommended setup is:
+
+1. add `pytest_park.pytest_plugin` to your test suite,
+2. run benchmarked unit tests with `pytest`, and
+3. read the `pytest-park` summary printed in the test output.
+
+Use `pytest-park analyze` or `pytest-park serve` when you want more specific historical analysis across saved benchmark artifacts.
+
 ```bash
 # Print version
 pytest-park version
-
-# Start interactive mode (no arguments) — presents a numbered menu for analyze/serve/version
-pytest-park
 
 # Analyze and compare latest run (candidate) against second-latest run (reference)
 pytest-park analyze ./.benchmarks --group-by group --group-by param:device
@@ -73,6 +80,9 @@ pytest-park serve ./.benchmarks --reference reference --original-postfix _orig -
 
 # Launch dashboard with profiler data
 pytest-park serve ./.benchmarks --profiler-folder ./.profiler --host 127.0.0.1 --port 8080
+
+# Start interactive mode (no arguments) when you specifically want guided CLI analysis or dashboard startup
+pytest-park
 ```
 
 ### Benchmark folder expectations
@@ -87,7 +97,66 @@ pytest-park serve ./.benchmarks --profiler-folder ./.profiler --host 127.0.0.1 -
 - Method normalization supports optional `--original-postfix` and `--reference-postfix` to align benchmark names across implementations.
 - Profiler artifacts can be linked via `--profiler-folder` (both `analyze` and `serve` subcommands).
 
-### pytest-benchmark group stats override
+### Recommended pytest workflow: enable the plugin and read the summary
+
+To print inline comparisons against the latest saved pytest-benchmark run, opt in to the
+pytest plugin from your top-level `conftest.py` (or another top-level pytest plugin module):
+
+```python
+# tests/conftest.py
+pytest_plugins = ["pytest_park.pytest_plugin"]
+```
+
+With that plugin enabled:
+
+- `pytest` becomes the default way to use `pytest-park` during normal development.
+- `pytest` will automatically compare each current benchmark against the latest saved run found in pytest-benchmark storage.
+- `pytest --benchmark-compare` keeps using pytest-benchmark storage selection, so you can target a specific saved baseline when needed.
+- `pytest --benchmark-save NAME` or `pytest --benchmark-autosave` are only needed if you also want to persist the current run as a future baseline.
+- Benchmark comparison output is emitted as a dedicated `pytest-park` terminal summary section after the pytest-benchmark tables, using the same comparison table shown by the CLI.
+- When tests are run from the VS Code Python Test Explorer, that summary section is still shown in the test run output.
+- If the run looks like VS Code's default single-shot benchmark execution, `pytest-park` prints a warning so the output is not mistaken for a real benchmark comparison.
+
+In short: enable the plugin once, run your benchmarked unit tests, and read the `pytest-park` section in the test output. Use the CLI and dashboard only when you need deeper or more targeted analysis.
+
+### How `--benchmark-compare` works with pytest-park
+
+`pytest-park` does not invent a second baseline format here. It reuses the baseline that
+`pytest-benchmark` resolves from its configured storage.
+
+That means the following commands keep the usual pytest-benchmark meaning, while also
+powering inline `pytest-park` comparison output:
+
+```bash
+# Compare against the latest saved benchmark run automatically
+pytest
+
+# Compare against the latest saved benchmark run in storage
+pytest --benchmark-compare
+
+# Compare against a specific saved run number or id/prefix
+pytest --benchmark-compare=0001
+pytest --benchmark-compare=8d530304
+
+# Save the current run and compare it against a chosen baseline in the same invocation
+pytest --benchmark-save candidate-v2 --benchmark-compare=0001
+```
+
+Behavior summary:
+
+- Registering `pytest_plugins = ["pytest_park.pytest_plugin"]` is enough to enable inline comparison output.
+- With no extra benchmark arguments, pytest-park uses the latest saved benchmark run from the configured storage as the baseline.
+- `--benchmark-compare` with no value means "compare against the latest saved run".
+- `--benchmark-compare=<value>` means "compare against the saved run selected by pytest-benchmark storage".
+- If you also pass `--benchmark-save` or `--benchmark-autosave`, the current run is still saved normally after execution.
+- If you do **not** save the current run, `pytest-park` can still print inline comparison output for the current session; it just will not persist that run as a future baseline.
+- Baseline lookup follows `--benchmark-storage`, so if you point pytest-benchmark at a different storage location, `pytest-park` will compare against that same location.
+
+In practice, use:
+
+- `--benchmark-autosave` when you want a rolling "compare against latest" workflow.
+- `--benchmark-compare=<saved-id>` when you want to pin comparisons to a known historical baseline.
+- `--benchmark-save <name> --benchmark-compare=<baseline>` when you want both a stable reference and a newly saved candidate artifact.
 
 If your benchmark method names encode postfixes and parameter segments, you can override
 `pytest_benchmark_group_stats` using the helper from this package:

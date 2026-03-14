@@ -11,7 +11,9 @@ def device(request: pytest.FixtureRequest) -> str:
     return str(request.param)
 
 
-def pytest_benchmark_group_stats(config: Any, benchmarks: list[Any], group_by: str) -> dict[str, list[Any]]:
+def pytest_benchmark_group_stats(
+    config: Any, benchmarks: list[Any], group_by: str
+) -> list[tuple[str | None, list[Any]]]:
     """Group benchmark stats using pytest-park naming conventions.
 
     This hook allows pytest-benchmark to group tests by base method name,

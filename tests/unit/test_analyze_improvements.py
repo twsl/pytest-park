@@ -19,7 +19,10 @@ def _make_case_payload(
     group: str,
     mean: float,
     params: dict[str, str],
+    *,
+    median: float | None = None,
 ) -> dict:
+    median_value = mean if median is None else median
     return {
         "name": name,
         "fullname": fullname,
@@ -27,7 +30,7 @@ def _make_case_payload(
         "params": params,
         "stats": {
             "mean": mean,
-            "median": mean,
+            "median": median_value,
             "min": mean * 0.95,
             "max": mean * 1.05,
             "stddev": mean * 0.01,
@@ -95,6 +98,46 @@ def param_role_folder(tmp_path: Path) -> Path:
         _make_case_payload("func1", "bench::func1", "examples", 2.5, {"device": "cpu", "implementation": "new"}),
         _make_case_payload("func1", "bench::func1", "examples", 5.0, {"device": "gpu", "implementation": "new"}),
         _make_case_payload("func2", "bench::func2", "examples", 3.5, {"device": "cpu", "implementation": "new"}),
+    ]
+
+    _write_run_file(folder / "run_reference.json", "run-ref", "ref", "2026-02-10T10:00:00Z", reference_cases)
+    _write_run_file(folder / "run_candidate.json", "run-cand", "cand", "2026-02-12T10:00:00Z", candidate_cases)
+    return folder
+
+
+@pytest.fixture()
+def postfix_role_unparameterized_original_folder(tmp_path: Path) -> Path:
+    """Run where the original implementation has no params but new variants do."""
+    folder = tmp_path / "benchmarks"
+    folder.mkdir()
+
+    candidate_cases = [
+        _make_case_payload("func1_original", "bench::func1_original", "", 3.0, {}),
+        _make_case_payload("func1_new", "bench::func1_new", "", 2.0, {"device": "cpu"}),
+        _make_case_payload("func1_new", "bench::func1_new", "", 4.0, {"device": "gpu"}),
+    ]
+    reference_cases = [
+        _make_case_payload("func1_new", "bench::func1_new", "", 2.5, {"device": "cpu"}),
+        _make_case_payload("func1_new", "bench::func1_new", "", 5.0, {"device": "gpu"}),
+    ]
+
+    _write_run_file(folder / "run_reference.json", "run-ref", "ref", "2026-02-10T10:00:00Z", reference_cases)
+    _write_run_file(folder / "run_candidate.json", "run-cand", "cand", "2026-02-12T10:00:00Z", candidate_cases)
+    return folder
+
+
+@pytest.fixture()
+def postfix_role_distinct_medians_folder(tmp_path: Path) -> Path:
+    """Run where mean- and median-based improvements differ."""
+    folder = tmp_path / "benchmarks"
+    folder.mkdir()
+
+    candidate_cases = [
+        _make_case_payload("func1_original", "bench::func1_original", "", 10.0, {}, median=6.0),
+        _make_case_payload("func1_new", "bench::func1_new", "", 8.0, {"device": "cpu"}, median=5.0),
+    ]
+    reference_cases = [
+        _make_case_payload("func1_new", "bench::func1_new", "", 9.0, {"device": "cpu"}, median=7.0),
     ]
 
     _write_run_file(folder / "run_reference.json", "run-ref", "ref", "2026-02-10T10:00:00Z", reference_cases)
@@ -206,6 +249,42 @@ def test_param_roles_vs_reference_run(param_role_folder) -> None:
     # func2 cpu: cand new=3.0, ref new=3.5 → +0.5 s / ≈14.3 %
     assert imp_f2_cpu.avg_vs_prev_time == pytest.approx(0.5)
     assert imp_f2_cpu.avg_vs_prev_pct == pytest.approx(100.0 / 7.0, rel=1e-3)
+
+
+def test_postfix_roles_fall_back_to_unparameterized_original(postfix_role_unparameterized_original_folder) -> None:
+    """A generic original baseline should compare against each parameterized new variant."""
+    runs = load_benchmark_folder(postfix_role_unparameterized_original_folder)
+    reference_run = select_reference_run(runs, "run-ref")
+    candidate_run = select_reference_run(runs, "run-cand")
+
+    improvements = analyze_method_improvements(candidate_run=candidate_run, reference_run=reference_run)
+
+    cpu_imp = next(imp for imp in improvements if imp.group == "params:device=cpu" and imp.method == "func1")
+    gpu_imp = next(imp for imp in improvements if imp.group == "params:device=gpu" and imp.method == "func1")
+
+    assert cpu_imp.avg_vs_orig_time == pytest.approx(1.0)  # 3.0 - 2.0
+    assert cpu_imp.avg_vs_orig_pct == pytest.approx(100.0 / 3.0, rel=1e-3)
+    assert gpu_imp.avg_vs_orig_time == pytest.approx(-1.0)  # 3.0 - 4.0
+    assert gpu_imp.avg_vs_orig_pct == pytest.approx(-100.0 / 3.0, rel=1e-3)
+
+    assert cpu_imp.avg_vs_prev_time == pytest.approx(0.5)  # 2.5 - 2.0
+    assert gpu_imp.avg_vs_prev_time == pytest.approx(1.0)  # 5.0 - 4.0
+
+
+def test_postfix_roles_use_median_stats_for_med_columns(postfix_role_distinct_medians_folder) -> None:
+    """Median columns should compare benchmark median values, not mean values."""
+    runs = load_benchmark_folder(postfix_role_distinct_medians_folder)
+    reference_run = select_reference_run(runs, "run-ref")
+    candidate_run = select_reference_run(runs, "run-cand")
+
+    improvements = analyze_method_improvements(candidate_run=candidate_run, reference_run=reference_run)
+
+    imp = next(imp for imp in improvements if imp.method == "func1" and imp.group == "params:device=cpu")
+
+    assert imp.avg_vs_orig_time == pytest.approx(2.0)  # 10.0 - 8.0
+    assert imp.med_vs_orig_time == pytest.approx(1.0)  # 6.0 - 5.0
+    assert imp.avg_vs_prev_time == pytest.approx(1.0)  # 9.0 - 8.0
+    assert imp.med_vs_prev_time == pytest.approx(2.0)  # 7.0 - 5.0
 
 
 def test_overall_summary_aggregates_correctly(param_role_folder) -> None:

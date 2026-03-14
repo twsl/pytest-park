@@ -302,11 +302,11 @@ def analyze_method_improvements(
     group_by: list[str] | None = None,
     exclude_params: list[str] | None = None,
 ) -> list[MethodImprovement]:
-    """Calculate average and median improvements per method vs original and previous run."""
+    """Calculate mean and median improvements per method vs original and comparison run."""
     improvements: list[MethodImprovement] = []
 
-    grouped_cand: dict[str, dict[str, dict[str, dict[str, list[float]]]]] = defaultdict(
-        lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    grouped_cand: dict[str, dict[str, dict[str, dict[str, dict[str, list[float] | set[str]]]]]] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(_empty_role_stats)))
     )
 
     for case in candidate_run.cases:
@@ -321,10 +321,15 @@ def analyze_method_improvements(
         else:
             method_name = case.base_name
 
-        grouped_cand[group_label][method_name][match_label][role].append(case.stats.mean)
+        role_stats = grouped_cand[group_label][method_name][match_label][role]
+        role_stats["mean"].append(case.stats.mean)
+        role_stats["median"].append(case.stats.median)
+        role_stats["min"].append(case.stats.min)
+        role_stats["max"].append(case.stats.max)
+        role_stats["names"].add(case.name)
 
-    grouped_ref: dict[str, dict[str, dict[str, dict[str, list[float]]]]] = defaultdict(
-        lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+    grouped_ref: dict[str, dict[str, dict[str, dict[str, dict[str, list[float] | set[str]]]]]] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(_empty_role_stats)))
     )
     if reference_run:
         for case in reference_run.cases:
@@ -339,7 +344,12 @@ def analyze_method_improvements(
             else:
                 method_name = case.base_name
 
-            grouped_ref[group_label][method_name][match_label][role].append(case.stats.mean)
+            role_stats = grouped_ref[group_label][method_name][match_label][role]
+            role_stats["mean"].append(case.stats.mean)
+            role_stats["median"].append(case.stats.median)
+            role_stats["min"].append(case.stats.min)
+            role_stats["max"].append(case.stats.max)
+            role_stats["names"].add(case.name)
 
     for group_label, methods in grouped_cand.items():
         for base_name, matches in methods.items():
@@ -358,50 +368,211 @@ def analyze_method_improvements(
 
             vs_orig_time_diffs = []
             vs_orig_pct_diffs = []
+            vs_orig_median_time_diffs = []
+            vs_orig_median_pct_diffs = []
+            vs_orig_min_time_diffs = []
+            vs_orig_min_pct_diffs = []
+            vs_orig_max_time_diffs = []
+            vs_orig_max_pct_diffs = []
             vs_prev_time_diffs = []
             vs_prev_pct_diffs = []
+            vs_prev_median_time_diffs = []
+            vs_prev_median_pct_diffs = []
+            vs_prev_min_time_diffs = []
+            vs_prev_min_pct_diffs = []
+            vs_prev_max_time_diffs = []
+            vs_prev_max_pct_diffs = []
+            current_names: set[str] = set()
+            comparison_names: set[str] = set()
+            original_names: set[str] = set()
 
             for match_label, roles in matches.items():
-                cand_means = roles.get(primary_role)
-                if not cand_means:
+                cand_role_stats = roles.get(primary_role)
+                if not cand_role_stats:
+                    continue
+                cand_means = _float_list(cand_role_stats.get("mean"))
+                cand_medians = _float_list(cand_role_stats.get("median"))
+                cand_mins = _float_list(cand_role_stats.get("min"))
+                cand_maxes = _float_list(cand_role_stats.get("max"))
+                current_names.update(_name_set(cand_role_stats.get("names")))
+                if not cand_means or not cand_medians or not cand_mins or not cand_maxes:
                     continue
                 cand_mean = sum(cand_means) / len(cand_means)
+                cand_median = median(cand_medians)
+                cand_min = sum(cand_mins) / len(cand_mins)
+                cand_max = sum(cand_maxes) / len(cand_maxes)
 
-                orig_means = roles.get("original")
-                if orig_means and primary_role != "original":
+                orig_stats = _resolve_role_stats(grouped_cand, group_label, base_name, match_label, "original")
+                if orig_stats and primary_role != "original":
+                    orig_means = _float_list(orig_stats.get("mean"))
+                    orig_medians = _float_list(orig_stats.get("median"))
+                    orig_mins = _float_list(orig_stats.get("min"))
+                    orig_maxes = _float_list(orig_stats.get("max"))
+                    if not orig_means or not orig_medians or not orig_mins or not orig_maxes:
+                        orig_stats = None
+
+                if orig_stats and primary_role != "original":
                     orig_mean = sum(orig_means) / len(orig_means)
-                    time_diff = orig_mean - cand_mean
-                    pct_diff = (time_diff / orig_mean) * 100.0 if orig_mean > 0 else 0.0
-                    vs_orig_time_diffs.append(time_diff)
-                    vs_orig_pct_diffs.append(pct_diff)
+                    orig_median = median(orig_medians)
+                    orig_min = sum(orig_mins) / len(orig_mins)
+                    orig_max = sum(orig_maxes) / len(orig_maxes)
+                    original_names.update(_name_set(orig_stats.get("names")))
+
+                    mean_time_diff = orig_mean - cand_mean
+                    mean_pct_diff = (mean_time_diff / orig_mean) * 100.0 if orig_mean > 0 else 0.0
+                    vs_orig_time_diffs.append(mean_time_diff)
+                    vs_orig_pct_diffs.append(mean_pct_diff)
+
+                    median_time_diff = orig_median - cand_median
+                    median_pct_diff = (median_time_diff / orig_median) * 100.0 if orig_median > 0 else 0.0
+                    vs_orig_median_time_diffs.append(median_time_diff)
+                    vs_orig_median_pct_diffs.append(median_pct_diff)
+
+                    min_time_diff = orig_min - cand_min
+                    min_pct_diff = (min_time_diff / orig_min) * 100.0 if orig_min > 0 else 0.0
+                    vs_orig_min_time_diffs.append(min_time_diff)
+                    vs_orig_min_pct_diffs.append(min_pct_diff)
+
+                    max_time_diff = orig_max - cand_max
+                    max_pct_diff = (max_time_diff / orig_max) * 100.0 if orig_max > 0 else 0.0
+                    vs_orig_max_time_diffs.append(max_time_diff)
+                    vs_orig_max_pct_diffs.append(max_pct_diff)
 
                 if reference_run:
-                    ref_roles = grouped_ref.get(group_label, {}).get(base_name, {}).get(match_label, {})
-                    ref_means = ref_roles.get(primary_role)
-                    if ref_means:
+                    ref_stats = _resolve_role_stats(grouped_ref, group_label, base_name, match_label, primary_role)
+                    if ref_stats:
+                        ref_means = _float_list(ref_stats.get("mean"))
+                        ref_medians = _float_list(ref_stats.get("median"))
+                        ref_mins = _float_list(ref_stats.get("min"))
+                        ref_maxes = _float_list(ref_stats.get("max"))
+                    else:
+                        ref_means = []
+                        ref_medians = []
+                        ref_mins = []
+                        ref_maxes = []
+
+                    if ref_means and ref_medians and ref_mins and ref_maxes:
                         ref_mean = sum(ref_means) / len(ref_means)
-                        time_diff = ref_mean - cand_mean
-                        pct_diff = (time_diff / ref_mean) * 100.0 if ref_mean > 0 else 0.0
-                        vs_prev_time_diffs.append(time_diff)
-                        vs_prev_pct_diffs.append(pct_diff)
+                        ref_median = median(ref_medians)
+                        ref_min = sum(ref_mins) / len(ref_mins)
+                        ref_max = sum(ref_maxes) / len(ref_maxes)
+                        comparison_names.update(_name_set(ref_stats.get("names")) if ref_stats else set())
+
+                        mean_time_diff = ref_mean - cand_mean
+                        mean_pct_diff = (mean_time_diff / ref_mean) * 100.0 if ref_mean > 0 else 0.0
+                        vs_prev_time_diffs.append(mean_time_diff)
+                        vs_prev_pct_diffs.append(mean_pct_diff)
+
+                        median_time_diff = ref_median - cand_median
+                        median_pct_diff = (median_time_diff / ref_median) * 100.0 if ref_median > 0 else 0.0
+                        vs_prev_median_time_diffs.append(median_time_diff)
+                        vs_prev_median_pct_diffs.append(median_pct_diff)
+
+                        min_time_diff = ref_min - cand_min
+                        min_pct_diff = (min_time_diff / ref_min) * 100.0 if ref_min > 0 else 0.0
+                        vs_prev_min_time_diffs.append(min_time_diff)
+                        vs_prev_min_pct_diffs.append(min_pct_diff)
+
+                        max_time_diff = ref_max - cand_max
+                        max_pct_diff = (max_time_diff / ref_max) * 100.0 if ref_max > 0 else 0.0
+                        vs_prev_max_time_diffs.append(max_time_diff)
+                        vs_prev_max_pct_diffs.append(max_pct_diff)
 
             improvements.append(
                 MethodImprovement(
                     group=group_label,
                     method=base_name,
+                    current_benchmark_name=_format_benchmark_names(current_names),
+                    comparison_benchmark_name=_format_benchmark_names(comparison_names),
+                    original_benchmark_name=_format_benchmark_names(original_names),
                     avg_vs_orig_time=sum(vs_orig_time_diffs) / len(vs_orig_time_diffs) if vs_orig_time_diffs else None,
                     avg_vs_orig_pct=sum(vs_orig_pct_diffs) / len(vs_orig_pct_diffs) if vs_orig_pct_diffs else None,
-                    med_vs_orig_time=median(vs_orig_time_diffs) if vs_orig_time_diffs else None,
-                    med_vs_orig_pct=median(vs_orig_pct_diffs) if vs_orig_pct_diffs else None,
+                    med_vs_orig_time=median(vs_orig_median_time_diffs) if vs_orig_median_time_diffs else None,
+                    med_vs_orig_pct=median(vs_orig_median_pct_diffs) if vs_orig_median_pct_diffs else None,
+                    min_vs_orig_time=sum(vs_orig_min_time_diffs) / len(vs_orig_min_time_diffs)
+                    if vs_orig_min_time_diffs
+                    else None,
+                    min_vs_orig_pct=sum(vs_orig_min_pct_diffs) / len(vs_orig_min_pct_diffs)
+                    if vs_orig_min_pct_diffs
+                    else None,
+                    max_vs_orig_time=sum(vs_orig_max_time_diffs) / len(vs_orig_max_time_diffs)
+                    if vs_orig_max_time_diffs
+                    else None,
+                    max_vs_orig_pct=sum(vs_orig_max_pct_diffs) / len(vs_orig_max_pct_diffs)
+                    if vs_orig_max_pct_diffs
+                    else None,
                     avg_vs_prev_time=sum(vs_prev_time_diffs) / len(vs_prev_time_diffs) if vs_prev_time_diffs else None,
                     avg_vs_prev_pct=sum(vs_prev_pct_diffs) / len(vs_prev_pct_diffs) if vs_prev_pct_diffs else None,
-                    med_vs_prev_time=median(vs_prev_time_diffs) if vs_prev_time_diffs else None,
-                    med_vs_prev_pct=median(vs_prev_pct_diffs) if vs_prev_pct_diffs else None,
+                    med_vs_prev_time=median(vs_prev_median_time_diffs) if vs_prev_median_time_diffs else None,
+                    med_vs_prev_pct=median(vs_prev_median_pct_diffs) if vs_prev_median_pct_diffs else None,
+                    min_vs_prev_time=sum(vs_prev_min_time_diffs) / len(vs_prev_min_time_diffs)
+                    if vs_prev_min_time_diffs
+                    else None,
+                    min_vs_prev_pct=sum(vs_prev_min_pct_diffs) / len(vs_prev_min_pct_diffs)
+                    if vs_prev_min_pct_diffs
+                    else None,
+                    max_vs_prev_time=sum(vs_prev_max_time_diffs) / len(vs_prev_max_time_diffs)
+                    if vs_prev_max_time_diffs
+                    else None,
+                    max_vs_prev_pct=sum(vs_prev_max_pct_diffs) / len(vs_prev_max_pct_diffs)
+                    if vs_prev_max_pct_diffs
+                    else None,
                 )
             )
 
     improvements.sort(key=lambda item: (item.group, item.method))
     return improvements
+
+
+def _empty_role_stats() -> dict[str, list[float] | set[str]]:
+    return {"mean": [], "median": [], "min": [], "max": [], "names": set()}
+
+
+def _resolve_role_stats(
+    grouped_runs: dict[str, dict[str, dict[str, dict[str, dict[str, list[float] | set[str]]]]]],
+    group_label: str,
+    method_name: str,
+    match_label: str,
+    role: str,
+) -> dict[str, list[float] | set[str]] | None:
+    role_matches = grouped_runs.get(group_label, {}).get(method_name, {})
+    exact = role_matches.get(match_label, {}).get(role)
+    if exact and _has_role_values(exact):
+        return exact
+
+    generic = role_matches.get("all", {}).get(role)
+    if generic and _has_role_values(generic):
+        return generic
+
+    for methods in grouped_runs.values():
+        fallback_exact = methods.get(method_name, {}).get(match_label, {}).get(role)
+        if fallback_exact and _has_role_values(fallback_exact):
+            return fallback_exact
+
+    for methods in grouped_runs.values():
+        fallback_generic = methods.get(method_name, {}).get("all", {}).get(role)
+        if fallback_generic and _has_role_values(fallback_generic):
+            return fallback_generic
+
+    return None
+
+
+def _has_role_values(stats: dict[str, list[float] | set[str]]) -> bool:
+    return bool(_float_list(stats.get("mean")) or _float_list(stats.get("median")))
+
+
+def _float_list(values: object) -> list[float]:
+    return list(values) if isinstance(values, list) else []
+
+
+def _name_set(values: object) -> set[str]:
+    return {str(value) for value in values} if isinstance(values, set) else set()
+
+
+def _format_benchmark_names(names: set[str]) -> str | None:
+    if not names:
+        return None
+    return ", ".join(sorted(names))
 
 
 def build_overall_improvement_summary(improvements: list[MethodImprovement]) -> dict[str, float | int | None]:
@@ -420,20 +591,36 @@ def build_overall_improvement_summary(improvements: list[MethodImprovement]) -> 
             "avg_vs_orig_pct": None,
             "med_vs_orig_time": None,
             "med_vs_orig_pct": None,
+            "min_vs_orig_time": None,
+            "min_vs_orig_pct": None,
+            "max_vs_orig_time": None,
+            "max_vs_orig_pct": None,
             "avg_vs_prev_time": None,
             "avg_vs_prev_pct": None,
             "med_vs_prev_time": None,
             "med_vs_prev_pct": None,
+            "min_vs_prev_time": None,
+            "min_vs_prev_pct": None,
+            "max_vs_prev_time": None,
+            "max_vs_prev_pct": None,
         }
 
     avg_orig_times = [imp.avg_vs_orig_time for imp in improvements if imp.avg_vs_orig_time is not None]
     avg_orig_pcts = [imp.avg_vs_orig_pct for imp in improvements if imp.avg_vs_orig_pct is not None]
     med_orig_times = [imp.med_vs_orig_time for imp in improvements if imp.med_vs_orig_time is not None]
     med_orig_pcts = [imp.med_vs_orig_pct for imp in improvements if imp.med_vs_orig_pct is not None]
+    min_orig_times = [imp.min_vs_orig_time for imp in improvements if imp.min_vs_orig_time is not None]
+    min_orig_pcts = [imp.min_vs_orig_pct for imp in improvements if imp.min_vs_orig_pct is not None]
+    max_orig_times = [imp.max_vs_orig_time for imp in improvements if imp.max_vs_orig_time is not None]
+    max_orig_pcts = [imp.max_vs_orig_pct for imp in improvements if imp.max_vs_orig_pct is not None]
     avg_prev_times = [imp.avg_vs_prev_time for imp in improvements if imp.avg_vs_prev_time is not None]
     avg_prev_pcts = [imp.avg_vs_prev_pct for imp in improvements if imp.avg_vs_prev_pct is not None]
     med_prev_times = [imp.med_vs_prev_time for imp in improvements if imp.med_vs_prev_time is not None]
     med_prev_pcts = [imp.med_vs_prev_pct for imp in improvements if imp.med_vs_prev_pct is not None]
+    min_prev_times = [imp.min_vs_prev_time for imp in improvements if imp.min_vs_prev_time is not None]
+    min_prev_pcts = [imp.min_vs_prev_pct for imp in improvements if imp.min_vs_prev_pct is not None]
+    max_prev_times = [imp.max_vs_prev_time for imp in improvements if imp.max_vs_prev_time is not None]
+    max_prev_pcts = [imp.max_vs_prev_pct for imp in improvements if imp.max_vs_prev_pct is not None]
 
     return {
         "count": len(improvements),
@@ -441,10 +628,18 @@ def build_overall_improvement_summary(improvements: list[MethodImprovement]) -> 
         "avg_vs_orig_pct": sum(avg_orig_pcts) / len(avg_orig_pcts) if avg_orig_pcts else None,
         "med_vs_orig_time": median(med_orig_times) if med_orig_times else None,
         "med_vs_orig_pct": median(med_orig_pcts) if med_orig_pcts else None,
+        "min_vs_orig_time": sum(min_orig_times) / len(min_orig_times) if min_orig_times else None,
+        "min_vs_orig_pct": sum(min_orig_pcts) / len(min_orig_pcts) if min_orig_pcts else None,
+        "max_vs_orig_time": sum(max_orig_times) / len(max_orig_times) if max_orig_times else None,
+        "max_vs_orig_pct": sum(max_orig_pcts) / len(max_orig_pcts) if max_orig_pcts else None,
         "avg_vs_prev_time": sum(avg_prev_times) / len(avg_prev_times) if avg_prev_times else None,
         "avg_vs_prev_pct": sum(avg_prev_pcts) / len(avg_prev_pcts) if avg_prev_pcts else None,
         "med_vs_prev_time": median(med_prev_times) if med_prev_times else None,
         "med_vs_prev_pct": median(med_prev_pcts) if med_prev_pcts else None,
+        "min_vs_prev_time": sum(min_prev_times) / len(min_prev_times) if min_prev_times else None,
+        "min_vs_prev_pct": sum(min_prev_pcts) / len(min_prev_pcts) if min_prev_pcts else None,
+        "max_vs_prev_time": sum(max_prev_times) / len(max_prev_times) if max_prev_times else None,
+        "max_vs_prev_pct": sum(max_prev_pcts) / len(max_prev_pcts) if max_prev_pcts else None,
     }
 
 

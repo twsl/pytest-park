@@ -13,6 +13,48 @@ class BenchmarkLoadError(ValueError):
     """Raised when a benchmark artifact cannot be parsed."""
 
 
+def load_benchmark_payload(
+    payload: dict[str, Any],
+    *,
+    source_file: str = "<memory>",
+    original_postfix: str | None = None,
+    reference_postfix: str | None = None,
+) -> BenchmarkRun | None:
+    """Load one in-memory pytest-benchmark payload into a run model."""
+    postfixes = _configured_postfixes(original_postfix, reference_postfix)
+    return _load_payload(payload, source_file=source_file, postfixes=postfixes)
+
+
+def build_benchmark_run(
+    benchmarks: list[dict[str, Any]],
+    *,
+    run_id: str,
+    source_file: str = "<memory>",
+    created_at: datetime | None = None,
+    tag: str | None = None,
+    commit_id: str | None = None,
+    machine: str | None = None,
+    python_version: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    original_postfix: str | None = None,
+    reference_postfix: str | None = None,
+) -> BenchmarkRun:
+    """Build a run model from live pytest-benchmark entries."""
+    postfixes = _configured_postfixes(original_postfix, reference_postfix)
+    return _build_benchmark_run(
+        benchmarks,
+        run_id=run_id,
+        source_file=source_file,
+        created_at=created_at,
+        tag=tag,
+        commit_id=commit_id,
+        machine=machine,
+        python_version=python_version,
+        metadata=metadata,
+        postfixes=postfixes,
+    )
+
+
 def load_benchmark_folder(
     folder: str | Path,
     original_postfix: str | None = None,
@@ -24,9 +66,12 @@ def load_benchmark_folder(
         raise BenchmarkLoadError(f"Benchmark folder does not exist: {root}")
 
     runs: list[BenchmarkRun] = []
-    postfixes = _configured_postfixes(original_postfix, reference_postfix)
     for artifact in sorted(root.rglob("*.json")):
-        maybe_run = _load_artifact(artifact, postfixes)
+        maybe_run = _load_artifact(
+            artifact,
+            original_postfix=original_postfix,
+            reference_postfix=reference_postfix,
+        )
         if maybe_run is not None:
             runs.append(maybe_run)
 
@@ -37,17 +82,31 @@ def load_benchmark_folder(
     return runs
 
 
-def _load_artifact(artifact: Path, postfixes: list[str]) -> BenchmarkRun | None:
+def _load_artifact(
+    artifact: Path,
+    *,
+    original_postfix: str | None = None,
+    reference_postfix: str | None = None,
+) -> BenchmarkRun | None:
     try:
         payload = json.loads(artifact.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise BenchmarkLoadError(f"Invalid JSON in artifact: {artifact}") from exc
 
+    return load_benchmark_payload(
+        payload,
+        source_file=str(artifact),
+        original_postfix=original_postfix,
+        reference_postfix=reference_postfix,
+    )
+
+
+def _load_payload(payload: dict[str, Any], *, source_file: str, postfixes: list[str]) -> BenchmarkRun | None:
     if not isinstance(payload, dict) or "benchmarks" not in payload:
         return None
 
     if not isinstance(payload["benchmarks"], list):
-        raise BenchmarkLoadError(f"Malformed benchmark list in artifact: {artifact}")
+        raise BenchmarkLoadError(f"Malformed benchmark list in artifact: {source_file}")
 
     commit_info = _as_dict(payload.get("commit_info"))
     machine_info = _as_dict(payload.get("machine_info"))
@@ -58,24 +117,51 @@ def _load_artifact(artifact: Path, postfixes: list[str]) -> BenchmarkRun | None:
         or payload.get("run_id")
         or payload.get("datetime")
         or commit_info.get("id")
-        or artifact.stem
+        or Path(source_file).stem
     )
     created_at = _parse_datetime(payload.get("datetime") or metadata.get("datetime"))
     tag = _first_non_empty(metadata.get("tag"), metadata.get("label"), payload.get("tag"))
 
-    run = BenchmarkRun(
+    return _build_benchmark_run(
+        payload["benchmarks"],
         run_id=run_id,
-        source_file=str(artifact),
+        source_file=source_file,
         created_at=created_at,
         tag=str(tag) if tag is not None else None,
         commit_id=str(commit_info.get("id")) if commit_info.get("id") else None,
         machine=str(machine_info.get("node")) if machine_info.get("node") else None,
         python_version=str(machine_info.get("python_version")) if machine_info.get("python_version") else None,
         metadata=metadata,
+        postfixes=postfixes,
+    )
+
+
+def _build_benchmark_run(
+    benchmarks: list[dict[str, Any]],
+    *,
+    run_id: str,
+    source_file: str,
+    created_at: datetime | None,
+    tag: str | None,
+    commit_id: str | None,
+    machine: str | None,
+    python_version: str | None,
+    metadata: dict[str, Any] | None,
+    postfixes: list[str],
+) -> BenchmarkRun:
+    run = BenchmarkRun(
+        run_id=run_id,
+        source_file=source_file,
+        created_at=created_at,
+        tag=tag,
+        commit_id=commit_id,
+        machine=machine,
+        python_version=python_version,
+        metadata=metadata or {},
         cases=[],
     )
 
-    for case_payload in payload["benchmarks"]:
+    for case_payload in benchmarks:
         if not isinstance(case_payload, dict):
             continue
         run.cases.append(_parse_case(case_payload, postfixes))

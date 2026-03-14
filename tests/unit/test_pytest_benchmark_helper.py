@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
+from pytest_park.data import build_benchmark_run
 from pytest_park.pytest_benchmark import default_pytest_benchmark_group_stats
 
 
@@ -17,7 +20,7 @@ class _Config:
 
 def test_default_group_stats_splits_name_parts() -> None:
     config = _Config(reference_postfix="_ref")
-    benchmarks = [
+    benchmarks: list[dict[str, Any]] = [
         {
             "name": "sort_values_ref[cpu]",
             "extra_info": {},
@@ -29,9 +32,10 @@ def test_default_group_stats_splits_name_parts() -> None:
     ]
 
     grouped = dict(default_pytest_benchmark_group_stats(config, benchmarks, "group"))
+    extra_info = cast(dict[str, object], benchmarks[0]["extra_info"])
 
     assert set(grouped.keys()) == {"sort_values", "reduce_sum"}
-    assert benchmarks[0]["extra_info"]["pytest_park_name_parts"] == {
+    assert extra_info["pytest_park_name_parts"] == {
         "base_name": "sort_values",
         "parameters": "cpu",
         "postfix": "_ref",
@@ -85,3 +89,36 @@ def test_default_group_stats_groups_by_postfix_with_custom_values() -> None:
     )
 
     assert set(grouped.keys()) == {"original", "reference", "unlabeled"}
+
+
+def test_build_benchmark_run_normalizes_live_benchmark_entries() -> None:
+    run = build_benchmark_run(
+        [
+            {
+                "name": "sort_values_ref[cpu]",
+                "fullname": "tests/test_demo.py::test_sort_values_ref[cpu]",
+                "group": "sorting",
+                "params": {"device": "cpu"},
+                "param": "cpu",
+                "extra_info": {},
+                "stats": {
+                    "mean": 1.0,
+                    "median": 1.0,
+                    "min": 0.9,
+                    "max": 1.1,
+                    "stddev": 0.01,
+                    "rounds": 5,
+                    "iterations": 1,
+                    "ops": 1.0,
+                },
+            }
+        ],
+        run_id="run-live",
+        source_file="<live>",
+        reference_postfix="_ref",
+    )
+
+    assert run.run_id == "run-live"
+    assert len(run.cases) == 1
+    assert run.cases[0].base_name == "sort_values"
+    assert run.cases[0].method_postfix == "_ref"

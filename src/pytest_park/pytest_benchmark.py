@@ -1,5 +1,4 @@
 from collections import defaultdict
-import operator
 from typing import Any
 
 from pytest_park.core.naming import parse_method_name
@@ -14,7 +13,7 @@ def default_pytest_benchmark_group_stats(
     reference_postfix: str | None = None,
     group_values_by_postfix: dict[str, str] | None = None,
     ignore_params: list[str] | None = None,
-) -> list[tuple[str, list[Any]]]:
+) -> list[tuple[str | None, list[Any]]]:
     """Group pytest-benchmark entries by split base method name.
 
     This is intended as a drop-in helper for overriding ``pytest_benchmark_group_stats``
@@ -33,7 +32,7 @@ def default_pytest_benchmark_group_stats(
         parts = parse_method_name(benchmark_name, postfixes)
         _store_name_parts(benchmark, parts.base_name, parts.parameters, parts.postfix)
 
-        key = []
+        key: list[str] = []
         for grouping in group_by.split(","):
             if grouping in {"group", "name", "method", "func"}:
                 key.append(parts.base_name)
@@ -72,10 +71,7 @@ def default_pytest_benchmark_group_stats(
             key=lambda b: _read_benchmark_attr(b, "fullname" if "full" in group_by else "name") or ""
         )
 
-    return sorted(
-        ((k, v) for k, v in groups.items() if k is not None),
-        key=operator.itemgetter(0),
-    )
+    return sorted(groups.items(), key=lambda pair: pair[0] or "")
 
 
 def _read_benchmark_attr(benchmark: Any, attr: str) -> Any:

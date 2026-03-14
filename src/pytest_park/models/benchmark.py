@@ -103,11 +103,22 @@ class MethodImprovement:
 
     group: str
     method: str
-    avg_vs_orig_time: float | None
-    avg_vs_orig_pct: float | None
-    med_vs_orig_time: float | None
-    med_vs_orig_pct: float | None
-    avg_vs_prev_time: float | None
-    avg_vs_prev_pct: float | None
-    med_vs_prev_time: float | None
-    med_vs_prev_pct: float | None
+    current_benchmark_name: str | None = None
+    comparison_benchmark_name: str | None = None
+    original_benchmark_name: str | None = None
+    avg_vs_orig_time: float | None = None
+    avg_vs_orig_pct: float | None = None
+    med_vs_orig_time: float | None = None
+    med_vs_orig_pct: float | None = None
+    min_vs_orig_time: float | None = None
+    min_vs_orig_pct: float | None = None
+    max_vs_orig_time: float | None = None
+    max_vs_orig_pct: float | None = None
+    avg_vs_prev_time: float | None = None
+    avg_vs_prev_pct: float | None = None
+    med_vs_prev_time: float | None = None
+    med_vs_prev_pct: float | None = None
+    min_vs_prev_time: float | None = None
+    min_vs_prev_pct: float | None = None
+    max_vs_prev_time: float | None = None
+    max_vs_prev_pct: float | None = None
