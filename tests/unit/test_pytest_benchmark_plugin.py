@@ -103,6 +103,53 @@ def _reference_payload(run_id: str = "run-reference") -> dict[str, Any]:
     }
 
 
+def _ungrouped_reference_payload(run_id: str = "run-reference") -> dict[str, Any]:
+    return {
+        "datetime": "2026-03-12T10:00:00Z",
+        "metadata": {"run_id": run_id, "tag": "reference"},
+        "machine_info": {"node": "test-node", "python_version": "3.12.0"},
+        "commit_info": {"id": "abc123"},
+        "benchmarks": [
+            {
+                "name": "test_func1_original",
+                "fullname": "tests/unit/examples/test_func1.py::test_func1_original",
+                "group": None,
+                "params": None,
+                "param": None,
+                "extra_info": {},
+                "stats": {
+                    "mean": 3.0,
+                    "median": 3.0,
+                    "min": 2.9,
+                    "max": 3.1,
+                    "stddev": 0.01,
+                    "rounds": 5,
+                    "iterations": 1,
+                    "ops": 1.0 / 3.0,
+                },
+            },
+            {
+                "name": "test_func1_new[cpu]",
+                "fullname": "tests/unit/examples/test_func1.py::test_func1_new[cpu]",
+                "group": None,
+                "params": {"device": "cpu"},
+                "param": "cpu",
+                "extra_info": {},
+                "stats": {
+                    "mean": 2.0,
+                    "median": 2.0,
+                    "min": 1.9,
+                    "max": 2.1,
+                    "stddev": 0.01,
+                    "rounds": 5,
+                    "iterations": 1,
+                    "ops": 0.5,
+                },
+            },
+        ],
+    }
+
+
 class _Metadata:
     def __init__(self, *, rounds: int = 5, iterations: int = 1) -> None:
         self.rounds = rounds
@@ -230,6 +277,23 @@ def test_plugin_writes_fallback_summary_without_terminal_reporter(monkeypatch) -
     assert output.startswith("\npytest-park\n")
     assert "Current Run vs Comparison Run (Candidate: current)" in output
     assert "sort_values" in output
+
+
+def test_plugin_summary_uses_strict_logical_groups_instead_of_param_fallback() -> None:
+    plugin = PytestParkBenchmarkPlugin(cast(pytest.Config, _Config()))
+    plugin.state.reference_run = load_benchmark_payload(
+        _ungrouped_reference_payload(),
+        source_file="baseline.json",
+        original_postfix="original",
+        reference_postfix="new",
+    )
+    plugin.state.candidate_payloads = _ungrouped_reference_payload("current")["benchmarks"]
+
+    table_text = plugin._build_summary_table_text()
+
+    assert table_text is not None
+    assert "ungrouped" in table_text
+    assert "params:device=cpu" not in table_text
 
 
 def test_plugin_warns_when_benchmarking_is_disabled() -> None:

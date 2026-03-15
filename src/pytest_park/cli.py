@@ -143,7 +143,7 @@ def _cmd_analyze(
     improvements = analyze_method_improvements(
         candidate_run=candidate_run,
         reference_run=reference_run,
-        group_by=grouping or None,
+        group_by=grouping or ["custom", "group"],
         exclude_params=exclude_params or None,
     )
 

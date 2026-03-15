@@ -171,9 +171,9 @@ def _build_improvement_table(
 
     widths = [
         max(
-            len(headers[index]),
-            max((len(row[index]) for row in rows), default=0),
-            len(summary_row[index]) if summary_row is not None else 0,
+            _cell_width(headers[index]),
+            max((_cell_width(row[index]) for row in rows), default=0),
+            _cell_width(summary_row[index]) if summary_row is not None else 0,
         )
         for index in range(len(headers))
     ]
@@ -204,13 +204,29 @@ def _build_improvement_table(
 
 
 def _format_row(values: list[str], widths: list[int], alignments: list[str]) -> str:
-    cells = []
-    for value, width, alignment in zip(values, widths, alignments, strict=True):
-        if alignment == "right":
-            cells.append(value.rjust(width))
-        else:
-            cells.append(value.ljust(width))
-    return "  ".join(cells)
+    cell_lines = [_split_cell_lines(value) for value in values]
+    row_height = max((len(lines) for lines in cell_lines), default=1)
+    rendered_lines: list[str] = []
+
+    for line_index in range(row_height):
+        cells = []
+        for lines, width, alignment in zip(cell_lines, widths, alignments, strict=True):
+            value = lines[line_index] if line_index < len(lines) else ""
+            if alignment == "right":
+                cells.append(value.rjust(width))
+            else:
+                cells.append(value.ljust(width))
+        rendered_lines.append("  ".join(cells))
+
+    return "\n".join(rendered_lines)
+
+
+def _cell_width(value: str) -> int:
+    return max((len(line) for line in _split_cell_lines(value)), default=0)
+
+
+def _split_cell_lines(value: str) -> list[str]:
+    return value.splitlines() or [""]
 
 
 def format_improvement_value(value: float | None, *, is_pct: bool = False) -> str:

@@ -94,7 +94,11 @@ class PytestParkBenchmarkPlugin:
         if reference_run is None or candidate_run is None:
             return None
 
-        improvements = analyze_method_improvements(candidate_run=candidate_run, reference_run=reference_run)
+        improvements = analyze_method_improvements(
+            candidate_run=candidate_run,
+            reference_run=reference_run,
+            group_by=["custom", "group"],
+        )
         if not improvements:
             return None
 

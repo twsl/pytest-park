@@ -9,6 +9,7 @@ from pytest_park.core import (
     analyze_method_improvements,
     build_overall_improvement_summary,
 )
+from pytest_park.core.analysis import _format_benchmark_names
 from pytest_park.data import load_benchmark_folder
 from pytest_park.utils import select_reference_run
 
@@ -195,6 +196,8 @@ def test_postfix_roles_vs_reference_run(postfix_role_folder) -> None:
     # candidate new: 4.0 vs reference new: 5.0 → improved by 1.0 s / 20 %
     assert gpu_imp.avg_vs_prev_time == pytest.approx(1.0)
     assert gpu_imp.avg_vs_prev_pct == pytest.approx(20.0)
+    assert cpu_imp.current_benchmark_name == "func1_new"
+    assert cpu_imp.comparison_benchmark_name == "func1_new"
 
 
 def test_param_roles_per_device_vs_orig(param_role_folder) -> None:
@@ -220,6 +223,10 @@ def test_param_roles_per_device_vs_orig(param_role_folder) -> None:
     assert imp_f1_gpu.avg_vs_orig_time == pytest.approx(2.0)  # 6.0 - 4.0
     assert imp_f2_cpu.avg_vs_orig_time == pytest.approx(2.0)  # 5.0 - 3.0
     assert imp_f2_cpu.avg_vs_orig_pct == pytest.approx(40.0)  # 2/5 * 100
+
+
+def test_format_benchmark_names_uses_new_lines_when_multiple_names_exist() -> None:
+    assert _format_benchmark_names({"func1_gpu", "func1_cpu"}) == "func1_cpu\nfunc1_gpu"
 
 
 def test_param_roles_vs_reference_run(param_role_folder) -> None:

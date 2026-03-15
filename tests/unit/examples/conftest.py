@@ -29,4 +29,5 @@ def pytest_benchmark_group_stats(
             "original": "baseline",
             "new": "optimized",
         },
+        ignore_params=["device"],
     )

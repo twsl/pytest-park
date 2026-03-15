@@ -572,7 +572,7 @@ def _name_set(values: object) -> set[str]:
 def _format_benchmark_names(names: set[str]) -> str | None:
     if not names:
         return None
-    return ", ".join(sorted(names))
+    return "\n".join(sorted(names))
 
 
 def build_overall_improvement_summary(improvements: list[MethodImprovement]) -> dict[str, float | int | None]:
@@ -692,6 +692,7 @@ def build_group_label(case: BenchmarkCase, group_by: list[str] | None = None) ->
                 custom_parts.append(maybe_part)
         if custom_parts:
             return " | ".join(custom_parts)
+        return "ungrouped"
 
     for token in DEFAULT_GROUPING_PRECEDENCE:
         maybe_part = _resolve_group_token(case, token)

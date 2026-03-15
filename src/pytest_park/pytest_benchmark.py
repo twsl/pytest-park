@@ -64,6 +64,7 @@ def default_pytest_benchmark_group_stats(
                 key.append(benchmark_name)
 
         group_key = " ".join(str(p) for p in key if p is not None) or None
+        _store_group_key(benchmark, group_key)
         groups[group_key].append(benchmark)
 
     for grouped_benchmarks in groups.values():
@@ -93,7 +94,7 @@ def _filter_ignored_params(bench: Any, ignore_params: list[str] | None) -> str:
             param_value = str(params_dict[param_name])
             filtered_parts = [p for p in filtered_parts if p != param_value]
 
-    return "-".join(filtered_parts) if filtered_parts else str(param_str)
+    return "-".join(filtered_parts)
 
 
 def _read_postfix(config: Any, option_name: str) -> str | None:
@@ -148,3 +149,11 @@ def _store_name_parts(benchmark: Any, base_name: str, parameters: str | None, po
         extra_info = {}
         benchmark.extra_info = extra_info
     extra_info["pytest_park_name_parts"] = name_parts
+
+
+def _store_group_key(benchmark: Any, group_key: str | None) -> None:
+    if isinstance(benchmark, dict):
+        benchmark["group"] = group_key
+        return
+
+    benchmark.group = group_key
