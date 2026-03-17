@@ -41,16 +41,7 @@ uv add --group test pytest-park
 
 ## Usage
 
-### Step 1 — Enable the plugin
-
-Add one line to your top-level `conftest.py`:
-
-```python
-# tests/conftest.py
-pytest_plugins = ["pytest_park.pytest_plugin"]
-```
-
-### Step 2 — Run your tests
+### Step 1 — Run your tests
 
 ```bash
 pytest
@@ -58,7 +49,9 @@ pytest
 
 After the normal pytest-benchmark tables, a `pytest-park` summary section is printed automatically. It compares the current run against the latest saved benchmark artifact found in pytest-benchmark storage. No extra arguments are needed.
 
-### Step 3 — Save runs to build a history (optional)
+> The plugin is registered automatically via the `pytest11` entry point when `pytest-park` is installed — no `conftest.py` changes are required.
+
+### Step 2 — Save runs to build a history (optional)
 
 ```bash
 # Save and keep comparing against the latest saved run automatically
@@ -169,16 +162,16 @@ pytest-park version
 
 Default precedence (when no `--group-by` is given): `custom > benchmark_group > marks > params`
 
-| Token | Alias(es) | Resolves to |
-|---|---|---|
-| `custom:<key>` | — | `extra_info["custom_groups"]["<key>"]` |
-| `custom` | `custom_group` | All custom group keys combined |
-| `group` | `benchmark_group` | Benchmark group label |
-| `marks` | `mark` | Comma-joined pytest marks |
-| `params` | — | All parameter key=value pairs |
-| `param:<name>` | — | Value of a specific parameter |
-| `name` | `method` | Normalized method name |
-| `fullname` | `nodeid` | Full test node path |
+| Token          | Alias(es)         | Resolves to                            |
+| -------------- | ----------------- | -------------------------------------- |
+| `custom:<key>` | —                 | `extra_info["custom_groups"]["<key>"]` |
+| `custom`       | `custom_group`    | All custom group keys combined         |
+| `group`        | `benchmark_group` | Benchmark group label                  |
+| `marks`        | `mark`            | Comma-joined pytest marks              |
+| `params`       | —                 | All parameter key=value pairs          |
+| `param:<name>` | —                 | Value of a specific parameter          |
+| `name`         | `method`          | Normalized method name                 |
+| `fullname`     | `nodeid`          | Full test node path                    |
 
 Multiple `--group-by` tokens can be combined; the resulting label is joined with `|`.
 

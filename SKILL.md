@@ -34,18 +34,7 @@ pip install pytest-park pytest-benchmark
 uv add --group test pytest-park pytest-benchmark
 ```
 
-### Step 2 — Enable the plugin
-
-Add one line to the top-level `conftest.py`:
-
-```python
-# tests/conftest.py
-pytest_plugins = ["pytest_park.pytest_plugin"]
-```
-
-That is the entire setup. No CLI flags, no extra configuration.
-
-### Step 3 — Write benchmark tests
+### Step 2 — Write benchmark tests
 
 ```python
 # tests/test_performance.py
@@ -64,7 +53,7 @@ def test_process_data_optimized(benchmark):
 
 Naming convention: use consistent postfixes like `_original`/`_optimized` or `_orig`/`_ref` so pytest-park can pair variants together.
 
-### Step 4 — Run tests
+### Step 3 — Run tests
 
 ```bash
 pytest
@@ -72,7 +61,9 @@ pytest
 
 After the normal pytest-benchmark tables, a `pytest-park` section is printed automatically. It compares the current run against the latest saved benchmark artifact in pytest-benchmark storage. No extra flags are required.
 
-### Step 5 — Build a history with `--benchmark-save` (optional but recommended)
+> The plugin is registered automatically via the `pytest11` entry point when `pytest-park` is installed — no `conftest.py` changes are required.
+
+### Step 4 — Build a history with `--benchmark-save` (optional but recommended)
 
 ```bash
 # Rolling "compare against latest" workflow
@@ -216,24 +207,24 @@ pytest-park version
 
 Default precedence when no `--group-by` is given: `custom > benchmark_group > marks > params`.
 
-| Token | Alias(es) | Resolves to |
-|---|---|---|
-| `custom:<key>` | — | `extra_info["custom_groups"]["<key>"]` |
-| `custom` | `custom_group` | All custom group keys combined |
-| `group` | `benchmark_group` | Benchmark group label |
-| `marks` | `mark` | Comma-joined pytest marks |
-| `params` | — | All parameter key=value pairs |
-| `param:<name>` | — | Value of a specific parameter |
-| `name` | `method` | Normalized method name |
-| `fullname` | `nodeid` | Full test node path |
+| Token          | Alias(es)         | Resolves to                            |
+| -------------- | ----------------- | -------------------------------------- |
+| `custom:<key>` | —                 | `extra_info["custom_groups"]["<key>"]` |
+| `custom`       | `custom_group`    | All custom group keys combined         |
+| `group`        | `benchmark_group` | Benchmark group label                  |
+| `marks`        | `mark`            | Comma-joined pytest marks              |
+| `params`       | —                 | All parameter key=value pairs          |
+| `param:<name>` | —                 | Value of a specific parameter          |
+| `name`         | `method`          | Normalized method name                 |
+| `fullname`     | `nodeid`          | Full test node path                    |
 
 Multiple `--group-by` tokens are combined; the label is joined with `|`.
 
 Additional tokens available only in `pytest_benchmark_group_stats` (not the CLI):
 
-| Token | Resolves to |
-|---|---|
-| `func` / `fullfunc` | Node path or base name |
+| Token                           | Resolves to                                               |
+| ------------------------------- | --------------------------------------------------------- |
+| `func` / `fullfunc`             | Node path or base name                                    |
 | `postfix` / `benchmark_postfix` | Parsed postfix label mapped via `group_values_by_postfix` |
 
 ### Artifact folder expectations
@@ -325,12 +316,9 @@ benchmark.extra_info["custom_groups"] = {"technique": "vectorization"}
 1. Is pytest-benchmark installed?
    └─ No → pip install pytest-park pytest-benchmark
 
-2. Is the plugin enabled in conftest.py?
-   └─ No → Add: pytest_plugins = ["pytest_park.pytest_plugin"]
-
-3. What does the user need?
+2. What does the user need?
    ├─ Inline feedback while coding
-   │   └─ Run: pytest  (plugin handles the rest)
+   │   └─ Run: pytest  (plugin auto-loads after installation)
    ├─ Save runs for future comparison
    │   └─ pytest --benchmark-autosave  or  --benchmark-save <name>
    ├─ Compare two specific saved runs
@@ -342,10 +330,11 @@ benchmark.extra_info["custom_groups"] = {"technique": "vectorization"}
    └─ Visual exploration
        └─ pytest-park serve ./.benchmarks --port 8080
 
-4. Results unclear or unexpected?
+3. Results unclear or unexpected?
    ├─ Check postfix configuration matches test names
    ├─ Verify data was saved with --benchmark-save-data
    ├─ Inspect .benchmarks/ (ls -la .benchmarks/)
    └─ Check for system variability / insufficient rounds
 ```
-6. Iterate and track progress over time
+
+4. Iterate and track progress over time
