@@ -18,11 +18,12 @@ Organise and analyse your pytest benchmarks
 
 ## Features
 
+- Inline benchmark comparison printed directly in `pytest` output — no extra commands needed.
 - Load pytest-benchmark JSON artifact folders and normalize runs, groups, marks, params, and custom grouping metadata.
-- Compare reference runs against candidate runs over time with per-case and per-group delta summaries.
-- Build custom grouping views with precedence across custom groups, benchmark groups, marks, and params.
-- Associate optional profiler artifacts with benchmark runs for code-level analysis context.
-- Serve an interactive local NiceGUI dashboard for exploratory benchmark comparison.
+- Compare reference runs against candidate runs with per-case and per-group delta and speedup summaries.
+- Flexible grouping: custom keys, benchmark groups, marks, params, and postfix-based name normalization.
+- Associate optional profiler artifacts with benchmark runs for code-level context.
+- Serve an interactive local NiceGUI dashboard for historical exploration.
 
 ## Installation
 
@@ -38,128 +39,49 @@ With [`uv`](https://docs.astral.sh/uv/):
 uv add --group test pytest-park
 ```
 
-## How to use it
+## Usage
 
-### Recommended default workflow
+### Step 1 — Enable the plugin
 
-For most projects, the recommended setup is:
-
-1. add `pytest_park.pytest_plugin` to your test suite,
-2. run benchmarked unit tests with `pytest`, and
-3. read the `pytest-park` summary printed in the test output.
-
-Use `pytest-park analyze` or `pytest-park serve` when you want more specific historical analysis across saved benchmark artifacts.
-
-```bash
-# Print version
-pytest-park version
-
-# Analyze and compare latest run (candidate) against second-latest run (reference)
-pytest-park analyze ./.benchmarks --group-by group --group-by param:device
-
-# Compare a named candidate run against a named reference tag/run id
-pytest-park analyze ./.benchmarks --reference reference --candidate candidate-v2 --group-by custom:scenario
-
-# When only --candidate is given, the run immediately before it in the list is used as reference
-pytest-park analyze ./.benchmarks --candidate candidate-v2
-
-# Exclude specific parameters from the comparison
-pytest-park analyze ./.benchmarks --exclude-param device
-
-# Keep a parameter distinct (not collapsed) during grouping
-pytest-park analyze ./.benchmarks --group-by group --distinct-param device
-
-# Normalize method names by stripping configured postfixes
-pytest-park analyze ./.benchmarks --original-postfix _orig --reference-postfix _ref
-
-# Include profiler artifacts alongside benchmark data
-pytest-park analyze ./.benchmarks --profiler-folder ./.profiler --group-by group
-
-# Launch interactive dashboard
-pytest-park serve ./.benchmarks --reference reference --original-postfix _orig --reference-postfix _ref --host 127.0.0.1 --port 8080
-
-# Launch dashboard with profiler data
-pytest-park serve ./.benchmarks --profiler-folder ./.profiler --host 127.0.0.1 --port 8080
-
-# Start interactive mode (no arguments) when you specifically want guided CLI analysis or dashboard startup
-pytest-park
-```
-
-### Benchmark folder expectations
-
-- Input artifacts are pytest-benchmark JSON files (`--benchmark-save` output) stored anywhere under a folder.
-- Reference selection uses explicit run id or tag metadata (`metadata.run_id`, `metadata.tag`, or fallback identifiers).
-- Default comparison baseline is latest run (candidate) vs second-latest run (reference) when `--reference` and `--candidate` are both omitted.
-- When only `--candidate` is provided, the run immediately preceding it in the list is used as the reference.
-- Grouping defaults to: custom groups > benchmark group > marks > params.
-- Grouping tokens for `--group-by` (alias for `--grouping`): `custom:<key>`, `custom` (all custom keys), `group` / `benchmark_group`, `mark` / `marks`, `params`, `param:<name>`, `name` / `method`, `fullname` / `nodeid`.
-- Use `--distinct-param` to treat a parameter as a separate dimension rather than collapsing it during grouping.
-- Method normalization supports optional `--original-postfix` and `--reference-postfix` to align benchmark names across implementations.
-- Profiler artifacts can be linked via `--profiler-folder` (both `analyze` and `serve` subcommands).
-
-### Recommended pytest workflow: enable the plugin and read the summary
-
-To print inline comparisons against the latest saved pytest-benchmark run, opt in to the
-pytest plugin from your top-level `conftest.py` (or another top-level pytest plugin module):
+Add one line to your top-level `conftest.py`:
 
 ```python
 # tests/conftest.py
 pytest_plugins = ["pytest_park.pytest_plugin"]
 ```
 
-With that plugin enabled:
-
-- `pytest` becomes the default way to use `pytest-park` during normal development.
-- `pytest` will automatically compare each current benchmark against the latest saved run found in pytest-benchmark storage.
-- `pytest --benchmark-compare` keeps using pytest-benchmark storage selection, so you can target a specific saved baseline when needed.
-- `pytest --benchmark-save NAME` or `pytest --benchmark-autosave` are only needed if you also want to persist the current run as a future baseline.
-- Benchmark comparison output is emitted as a dedicated `pytest-park` terminal summary section after the pytest-benchmark tables, using the same comparison table shown by the CLI.
-- When tests are run from the VS Code Python Test Explorer, that summary section is still shown in the test run output.
-- If the run looks like VS Code's default single-shot benchmark execution, `pytest-park` prints a warning so the output is not mistaken for a real benchmark comparison.
-
-In short: enable the plugin once, run your benchmarked unit tests, and read the `pytest-park` section in the test output. Use the CLI and dashboard only when you need deeper or more targeted analysis.
-
-### How `--benchmark-compare` works with pytest-park
-
-`pytest-park` does not invent a second baseline format here. It reuses the baseline that
-`pytest-benchmark` resolves from its configured storage.
-
-That means the following commands keep the usual pytest-benchmark meaning, while also
-powering inline `pytest-park` comparison output:
+### Step 2 — Run your tests
 
 ```bash
-# Compare against the latest saved benchmark run automatically
 pytest
+```
 
-# Compare against the latest saved benchmark run in storage
-pytest --benchmark-compare
+After the normal pytest-benchmark tables, a `pytest-park` summary section is printed automatically. It compares the current run against the latest saved benchmark artifact found in pytest-benchmark storage. No extra arguments are needed.
 
-# Compare against a specific saved run number or id/prefix
+### Step 3 — Save runs to build a history (optional)
+
+```bash
+# Save and keep comparing against the latest saved run automatically
+pytest --benchmark-autosave
+
+# Save with a meaningful name for a stable reference point
+pytest --benchmark-save baseline
+
+# Compare against a specific saved run
 pytest --benchmark-compare=0001
 pytest --benchmark-compare=8d530304
 
-# Save the current run and compare it against a chosen baseline in the same invocation
+# Save a candidate and compare it against a specific baseline
 pytest --benchmark-save candidate-v2 --benchmark-compare=0001
 ```
 
-Behavior summary:
+`pytest-park` reuses the baseline that `pytest-benchmark` resolves from its configured storage — it does not require a second format. `--benchmark-storage` is respected as usual.
 
-- Registering `pytest_plugins = ["pytest_park.pytest_plugin"]` is enough to enable inline comparison output.
-- With no extra benchmark arguments, pytest-park uses the latest saved benchmark run from the configured storage as the baseline.
-- `--benchmark-compare` with no value means "compare against the latest saved run".
-- `--benchmark-compare=<value>` means "compare against the saved run selected by pytest-benchmark storage".
-- If you also pass `--benchmark-save` or `--benchmark-autosave`, the current run is still saved normally after execution.
-- If you do **not** save the current run, `pytest-park` can still print inline comparison output for the current session; it just will not persist that run as a future baseline.
-- Baseline lookup follows `--benchmark-storage`, so if you point pytest-benchmark at a different storage location, `pytest-park` will compare against that same location.
+> **VS Code Test Explorer**: if the run looks like a single-shot execution (benchmark timing disabled or reduced), `pytest-park` prints a warning so the output is not mistaken for a real comparison.
 
-In practice, use:
+### Name normalization and grouping (optional)
 
-- `--benchmark-autosave` when you want a rolling "compare against latest" workflow.
-- `--benchmark-compare=<saved-id>` when you want to pin comparisons to a known historical baseline.
-- `--benchmark-save <name> --benchmark-compare=<baseline>` when you want both a stable reference and a newly saved candidate artifact.
-
-If your benchmark method names encode postfixes and parameter segments, you can override
-`pytest_benchmark_group_stats` using the helper from this package:
+If your benchmark names encode variant postfixes (e.g. `test_func_orig`, `test_func_ref`), add the `pytest_benchmark_group_stats` hook to group and label variants together:
 
 ```python
 # tests/conftest.py
@@ -167,29 +89,128 @@ from pytest_park.pytest_benchmark import default_pytest_benchmark_group_stats
 
 
 def pytest_benchmark_group_stats(config, benchmarks, group_by):
-	return default_pytest_benchmark_group_stats(
-		config,
-		benchmarks,
-		group_by,
-		original_postfix="_orig",
-		reference_postfix="_ref",
-		group_values_by_postfix={
-			"_orig": "original",
-			"_ref": "reference",
-			"none": "unlabeled",
-		},
-	)
+    return default_pytest_benchmark_group_stats(
+        config,
+        benchmarks,
+        group_by,
+        original_postfix="_orig",
+        reference_postfix="_ref",
+        group_values_by_postfix={
+            "_orig": "original",
+            "_ref": "reference",
+        },
+    )
 ```
 
-This stores parsed parts in `extra_info["pytest_park_name_parts"]` with `base_name`, `parameters`, and `postfix`.
+This stores parsed parts in `extra_info["pytest_park_name_parts"]` (`base_name`, `parameters`, `postfix`) and groups paired variants under the same row in the comparison table.
 
-If you use postfixes in benchmark names, expose matching pytest-benchmark options in the same `conftest.py`:
+To expose the postfix options as pytest flags:
 
 ```python
 def pytest_addoption(parser):
-	parser.addoption("--benchmark-original-postfix", action="store", default="")
-	parser.addoption("--benchmark-reference-postfix", action="store", default="")
+    parser.addoption("--benchmark-original-postfix", action="store", default="")
+    parser.addoption("--benchmark-reference-postfix", action="store", default="")
 ```
+
+### Custom grouping metadata (optional)
+
+Store arbitrary metadata on a benchmark for richer grouping:
+
+```python
+def test_compute_optimized(benchmark):
+    benchmark.extra_info["custom_groups"] = {
+        "technique": "vectorization",
+        "scenario": "large-batch",
+    }
+    benchmark(compute)
+```
+
+Group by any key with `--group-by custom:technique` in the CLI.
+
+---
+
+## CLI — deeper analysis across saved artifacts
+
+Use the CLI when you want to compare specific saved runs, apply advanced grouping, or include profiler data.
+
+```bash
+# Compare latest run (candidate) against second-latest run (reference)
+pytest-park analyze ./.benchmarks
+
+# Compare named runs
+pytest-park analyze ./.benchmarks --reference baseline --candidate candidate-v2
+
+# When only --candidate is given, the preceding run is used as reference
+pytest-park analyze ./.benchmarks --candidate candidate-v2
+
+# Group by benchmark group and a specific parameter
+pytest-park analyze ./.benchmarks --group-by group --group-by param:device
+
+# Group by custom metadata key
+pytest-park analyze ./.benchmarks --group-by custom:scenario
+
+# Exclude a parameter from comparison
+pytest-park analyze ./.benchmarks --exclude-param device
+
+# Keep a parameter as a separate dimension
+pytest-park analyze ./.benchmarks --group-by group --distinct-param device
+
+# Normalize method names by stripping postfixes
+pytest-park analyze ./.benchmarks --original-postfix _orig --reference-postfix _ref
+
+# Include profiler artifacts
+pytest-park analyze ./.benchmarks --profiler-folder ./.profiler --group-by group
+
+# Print installed version
+pytest-park version
+```
+
+### Grouping reference
+
+Default precedence (when no `--group-by` is given): `custom > benchmark_group > marks > params`
+
+| Token | Alias(es) | Resolves to |
+|---|---|---|
+| `custom:<key>` | — | `extra_info["custom_groups"]["<key>"]` |
+| `custom` | `custom_group` | All custom group keys combined |
+| `group` | `benchmark_group` | Benchmark group label |
+| `marks` | `mark` | Comma-joined pytest marks |
+| `params` | — | All parameter key=value pairs |
+| `param:<name>` | — | Value of a specific parameter |
+| `name` | `method` | Normalized method name |
+| `fullname` | `nodeid` | Full test node path |
+
+Multiple `--group-by` tokens can be combined; the resulting label is joined with `|`.
+
+### Artifact folder expectations
+
+- Input files are pytest-benchmark JSON files (`--benchmark-save` output) stored anywhere under the folder.
+- Default comparison: latest run as candidate, second-latest as reference.
+- When only `--candidate` is given, the run immediately preceding it is used as reference.
+- Run identity uses `metadata.run_id`, `metadata.tag`, or fallback datetime identifiers.
+
+---
+
+## Interactive dashboard
+
+For exploratory, visual analysis across many saved runs:
+
+```bash
+pytest-park serve ./.benchmarks --reference baseline --host 127.0.0.1 --port 8080
+
+# With profiler data
+pytest-park serve ./.benchmarks --profiler-folder ./.profiler --port 8080
+```
+
+Access the dashboard at `http://127.0.0.1:8080`. Features include run selection, history charts, delta distribution, and method-level drill-down.
+
+To launch a guided interactive CLI session instead:
+
+```bash
+pytest-park
+```
+
+---
 
 ## Docs
 
