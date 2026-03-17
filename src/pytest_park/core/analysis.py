@@ -439,7 +439,15 @@ def analyze_method_improvements(
                     vs_orig_max_pct_diffs.append(max_pct_diff)
 
                 if reference_run:
-                    ref_stats = _resolve_role_stats(grouped_ref, group_label, base_name, match_label, primary_role)
+                    cand_names_for_match = _name_set(cand_role_stats.get("names"))
+                    ref_stats = _resolve_role_stats(
+                        grouped_ref,
+                        group_label,
+                        base_name,
+                        match_label,
+                        primary_role,
+                        cand_names=cand_names_for_match,
+                    )
                     if ref_stats:
                         ref_means = _float_list(ref_stats.get("mean"))
                         ref_medians = _float_list(ref_stats.get("median"))
@@ -534,6 +542,7 @@ def _resolve_role_stats(
     method_name: str,
     match_label: str,
     role: str,
+    cand_names: set[str] | None = None,
 ) -> dict[str, list[float] | set[str]] | None:
     role_matches = grouped_runs.get(group_label, {}).get(method_name, {})
     exact = role_matches.get(match_label, {}).get(role)
@@ -553,6 +562,17 @@ def _resolve_role_stats(
         fallback_generic = methods.get(method_name, {}).get("all", {}).get(role)
         if fallback_generic and _has_role_values(fallback_generic):
             return fallback_generic
+
+    # Final fallback: match by benchmark name when params-based matching fails
+    # (e.g. when callspec.params contains non-serializable objects whose str()
+    # representations differ between the live run and the saved JSON).
+    if cand_names:
+        for methods in grouped_runs.values():
+            for roles in methods.get(method_name, {}).values():
+                stats = roles.get(role)
+                if stats and _has_role_values(stats):
+                    if _name_set(stats.get("names")) & cand_names:
+                        return stats
 
     return None
 
