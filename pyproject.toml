@@ -75,6 +75,9 @@ debug = [
     "line-profiler>=5.0.2",
 ]
 
+[project.entry-points."pytest11"]
+pytest-park = "pytest_park.pytest_plugin"
+
 [project.scripts]
 pytest-park = "pytest_park.cli:main"
 
