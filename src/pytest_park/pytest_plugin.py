@@ -80,6 +80,13 @@ class PytestParkBenchmarkPlugin:
         if warning_text:
             output.extend(warning_text.splitlines())
 
+        if self.config.getoption("verbose", default=0) >= 1:
+            debug_lines = self._build_debug_lines()
+            if debug_lines:
+                if output:
+                    output.append("")
+                output.extend(debug_lines)
+
         table_text = self._build_summary_table_text()
         if table_text:
             if output:
@@ -87,6 +94,36 @@ class PytestParkBenchmarkPlugin:
             output.extend(table_text.splitlines())
 
         return output
+
+    def _build_debug_lines(self) -> list[str]:
+        lines: list[str] = []
+
+        benchmarksession = getattr(self.config, "_benchmarksession", None)
+        if benchmarksession is None:
+            lines.append("debug: pytest-benchmark session: not found (plugin may not be active)")
+        else:
+            storage = getattr(benchmarksession, "storage", None)
+            storage_path = str(getattr(storage, "path", "<unknown>")) if storage else "<no storage>"
+            lines.append(f"debug: benchmark storage: {storage_path}")
+
+        ref = self.state.reference_run
+        if ref is None:
+            lines.append("debug: reference run: none (no saved benchmark file found)")
+        else:
+            lines.append(f"debug: reference run: {ref.source_file!r}  run_id={ref.run_id!r}  cases={len(ref.cases)}")
+
+        n_payloads = len(self.state.candidate_payloads)
+        lines.append(f"debug: candidate payloads collected: {n_payloads}")
+
+        candidate_run = self._build_candidate_run()
+        if candidate_run is None:
+            lines.append("debug: candidate run: none")
+        else:
+            lines.append(f"debug: candidate run: run_id={candidate_run.run_id!r}  cases={len(candidate_run.cases)}")
+
+        lines.append("debug: group_by=['custom', 'group']")
+
+        return lines
 
     def _build_summary_table_text(self) -> str | None:
         reference_run = self.state.reference_run
