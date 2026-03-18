@@ -53,7 +53,6 @@ def test_pytest_plugin_emits_inline_terminal_output(tmp_path: Path) -> None:
     benchmark_storage.mkdir()
     _write_reference_run(benchmark_storage / "0001_reference.json")
 
-    (project / "conftest.py").write_text('pytest_plugins = ["pytest_park.pytest_plugin"]\n', encoding="utf-8")
     (project / "test_inline.py").write_text(
         "from __future__ import annotations\n"
         "\n"
@@ -98,7 +97,6 @@ def test_pytest_plugin_warns_for_benchmark_disable_mode(tmp_path: Path) -> None:
     benchmark_storage.mkdir()
     _write_reference_run(benchmark_storage / "0001_reference.json")
 
-    (project / "conftest.py").write_text('pytest_plugins = ["pytest_park.pytest_plugin"]\n', encoding="utf-8")
     (project / "test_inline.py").write_text(
         "from __future__ import annotations\n"
         "\n"
