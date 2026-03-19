@@ -1,7 +1,15 @@
 from collections import defaultdict
 from typing import Any
 
+import pytest
+
 from pytest_park.core.naming import parse_method_name
+
+# Stash keys: populated by default_pytest_benchmark_group_stats so the plugin
+# can read conftest.py-configured postfixes even when pytest-benchmark never
+# calls the hook (e.g. VS Code single-shot / debug mode).
+_STASH_ORIGINAL_POSTFIXES: pytest.StashKey[list[str]] = pytest.StashKey()
+_STASH_REFERENCE_POSTFIXES: pytest.StashKey[list[str]] = pytest.StashKey()
 
 
 def default_pytest_benchmark_group_stats(
@@ -23,6 +31,9 @@ def default_pytest_benchmark_group_stats(
     cli_reference = _read_postfixes(config, "benchmark_reference_postfix")
     configured_original = cli_original or _normalize_postfix_arg(original_postfix)
     configured_reference = cli_reference or _normalize_postfix_arg(reference_postfix)
+    # Persist into config.stash so the plugin can read them back even in
+    # debug/single-shot mode where pytest-benchmark skips this hook.
+    _register_postfixes_in_config(config, configured_original, configured_reference)
     postfixes = configured_original + configured_reference
     postfix_value_map = {
         _normalize_postfix_key(key): value
@@ -77,6 +88,47 @@ def default_pytest_benchmark_group_stats(
         )
 
     return sorted(groups.items(), key=lambda pair: pair[0] or "")
+
+
+def _register_postfixes_in_config(config: Any, original: list[str], reference: list[str]) -> None:
+    """Merge postfixes into config.stash so the plugin can read them back."""
+    stash = getattr(config, "stash", None)
+    if stash is None:
+        return
+    try:
+        existing_orig: list[str] = stash.get(_STASH_ORIGINAL_POSTFIXES, [])
+        existing_ref: list[str] = stash.get(_STASH_REFERENCE_POSTFIXES, [])
+        stash[_STASH_ORIGINAL_POSTFIXES] = _merge_unique(existing_orig, original)
+        stash[_STASH_REFERENCE_POSTFIXES] = _merge_unique(existing_ref, reference)
+    except Exception:
+        pass
+
+
+def _merge_unique(existing: list[str], new: list[str]) -> list[str]:
+    seen = set(existing)
+    result = list(existing)
+    for item in new:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
+
+def _read_effective_postfixes(config: Any, option_name: str) -> list[str]:
+    """Read postfixes with CLI/ini taking precedence; fall back to values
+    registered via conftest.py calls to default_pytest_benchmark_group_stats.
+    """
+    cli_values = _read_postfixes(config, option_name)
+    if cli_values:
+        return cli_values
+    stash = getattr(config, "stash", None)
+    if stash is None:
+        return []
+    stash_key = _STASH_ORIGINAL_POSTFIXES if "original" in option_name else _STASH_REFERENCE_POSTFIXES
+    try:
+        return list(stash.get(stash_key, []))
+    except Exception:
+        return []
 
 
 def _read_benchmark_attr(benchmark: Any, attr: str) -> Any:

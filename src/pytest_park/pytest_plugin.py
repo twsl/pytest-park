@@ -14,7 +14,7 @@ from pytest_park.core.reporting import (
     build_regression_table,
 )
 from pytest_park.data import build_benchmark_run, load_benchmark_payload
-from pytest_park.pytest_benchmark import _read_postfix, _read_postfixes
+from pytest_park.pytest_benchmark import _read_effective_postfixes, _read_postfix, _read_postfixes
 
 
 @dataclass(slots=True)
@@ -39,6 +39,12 @@ class PytestParkBenchmarkPlugin:
         self.state = _PluginState()
 
     def pytest_sessionstart(self, session: pytest.Session) -> None:
+        # Probe the group-stats hook with an empty benchmarks list so any
+        # conftest.py implementation of pytest_benchmark_group_stats registers
+        # its postfixes into config.stash before the plugin reads them.  This
+        # is needed in debug / single-shot mode where pytest-benchmark itself
+        # never calls the hook.
+        _probe_benchmark_group_stats_hook(self.config)
         self.state.reference_run = self._load_reference_run()
 
     @pytest.hookimpl(hookwrapper=True)
@@ -125,10 +131,20 @@ class PytestParkBenchmarkPlugin:
         else:
             lines.append(f"debug: candidate run_id: {candidate_run.run_id}  cases: {len(candidate_run.cases)}")
 
-        orig_postfixes = _read_postfixes(self.config, "benchmark_original_postfix")
-        ref_postfixes = _read_postfixes(self.config, "benchmark_reference_postfix")
-        lines.append(f"debug: original_postfixes: {orig_postfixes}")
-        lines.append(f"debug: reference_postfixes: {ref_postfixes}")
+        orig_postfixes = _read_effective_postfixes(self.config, "benchmark_original_postfix")
+        ref_postfixes = _read_effective_postfixes(self.config, "benchmark_reference_postfix")
+        orig_src = (
+            "CLI/ini"
+            if _read_postfixes(self.config, "benchmark_original_postfix")
+            else ("conftest.py" if orig_postfixes else "not configured")
+        )
+        ref_src = (
+            "CLI/ini"
+            if _read_postfixes(self.config, "benchmark_reference_postfix")
+            else ("conftest.py" if ref_postfixes else "not configured")
+        )
+        lines.append(f"debug: original_postfixes: {orig_postfixes} ({orig_src})")
+        lines.append(f"debug: reference_postfixes: {ref_postfixes} ({ref_src})")
         lines.append("debug: group_by: ['custom', 'group']")
         lines.append(f"debug: benchmark_compare: {self.config.getoption('benchmark_compare', default=None)}")
         lines.append(f"debug: benchmark_save: {self.config.getoption('benchmark_save', default=None)}")
@@ -141,8 +157,8 @@ class PytestParkBenchmarkPlugin:
         if candidate_run is None:
             return None
 
-        orig_postfixes = _read_postfixes(self.config, "benchmark_original_postfix")
-        ref_postfixes = _read_postfixes(self.config, "benchmark_reference_postfix")
+        orig_postfixes = _read_effective_postfixes(self.config, "benchmark_original_postfix")
+        ref_postfixes = _read_effective_postfixes(self.config, "benchmark_reference_postfix")
         sections: list[str] = []
 
         # 1. Regression table: flat per-method comparison vs previous run
@@ -223,8 +239,8 @@ class PytestParkBenchmarkPlugin:
             run_id=self._current_run_id(),
             source_file="<live>",
             created_at=datetime.now(tz=UTC),
-            original_postfix=_read_postfixes(self.config, "benchmark_original_postfix"),
-            reference_postfix=_read_postfixes(self.config, "benchmark_reference_postfix"),
+            original_postfix=_read_effective_postfixes(self.config, "benchmark_original_postfix"),
+            reference_postfix=_read_effective_postfixes(self.config, "benchmark_reference_postfix"),
         )
 
     def _build_current_benchmark_payload(self, metadata: Any) -> dict[str, Any]:
@@ -251,8 +267,8 @@ class PytestParkBenchmarkPlugin:
         return load_benchmark_payload(
             payload,
             source_file=str(path),
-            original_postfix=_read_postfixes(self.config, "benchmark_original_postfix"),
-            reference_postfix=_read_postfixes(self.config, "benchmark_reference_postfix"),
+            original_postfix=_read_effective_postfixes(self.config, "benchmark_original_postfix"),
+            reference_postfix=_read_effective_postfixes(self.config, "benchmark_reference_postfix"),
         )
 
     def _current_run_id(self) -> str:
@@ -265,6 +281,30 @@ class PytestParkBenchmarkPlugin:
             return autosave_name
 
         return "current"
+
+
+def _probe_benchmark_group_stats_hook(config: pytest.Config) -> None:
+    """Call pytest_benchmark_group_stats with empty benchmarks at session start.
+
+    This triggers conftest.py implementations of the hook so that
+    default_pytest_benchmark_group_stats registers their postfixes in
+    config.stash before the plugin needs them — even when pytest-benchmark
+    itself never calls the hook (debug / benchmark-disabled mode).
+
+    Multiple conftest.py registrations are handled safely: _register_postfixes_in_config
+    merges repeated calls, and firstresult semantics mean only the innermost
+    conftest.py's hook runs per session.
+    """
+    hook = getattr(getattr(config, "pluginmanager", None), "hook", None)
+    if hook is None:
+        return
+    group_stats = getattr(hook, "pytest_benchmark_group_stats", None)
+    if group_stats is None:
+        return
+    try:
+        group_stats(config=config, benchmarks=[], group_by="name")
+    except Exception:
+        pass
 
 
 def _select_reference_payloads(config: pytest.Config, benchmark_session: Any) -> list[tuple[Path | str, Any]]:
