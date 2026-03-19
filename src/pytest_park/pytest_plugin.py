@@ -7,10 +7,14 @@ from typing import Any
 
 import pytest
 
-from pytest_park.core import analyze_method_improvements
+from pytest_park.core import build_postfix_comparison, build_regression_improvements
+from pytest_park.core.reporting import (
+    build_benchmark_header_label,
+    build_postfix_comparison_table,
+    build_regression_table,
+)
 from pytest_park.data import build_benchmark_run, load_benchmark_payload
-from pytest_park.pytest_benchmark import _read_postfix
-from pytest_park.reporting import build_analysis_tables, build_benchmark_header_label
+from pytest_park.pytest_benchmark import _read_postfix, _read_postfixes
 
 
 @dataclass(slots=True)
@@ -80,12 +84,11 @@ class PytestParkBenchmarkPlugin:
         if warning_text:
             output.extend(warning_text.splitlines())
 
-        if self.config.getoption("verbose", default=0) >= 1:
-            debug_lines = self._build_debug_lines()
-            if debug_lines:
-                if output:
-                    output.append("")
-                output.extend(debug_lines)
+        debug_lines = self._build_debug_lines()
+        if debug_lines:
+            if output:
+                output.append("")
+            output.extend(debug_lines)
 
         table_text = self._build_summary_table_text()
         if table_text:
@@ -108,9 +111,10 @@ class PytestParkBenchmarkPlugin:
 
         ref = self.state.reference_run
         if ref is None:
-            lines.append("debug: reference run: none (no saved benchmark file found)")
+            lines.append("debug: reference file: none (no saved benchmark file found)")
         else:
-            lines.append(f"debug: reference run: {ref.source_file!r}  run_id={ref.run_id!r}  cases={len(ref.cases)}")
+            lines.append(f"debug: reference file: {ref.source_file}")
+            lines.append(f"debug: reference run_id: {ref.run_id}  cases: {len(ref.cases)}")
 
         n_payloads = len(self.state.candidate_payloads)
         lines.append(f"debug: candidate payloads collected: {n_payloads}")
@@ -119,37 +123,72 @@ class PytestParkBenchmarkPlugin:
         if candidate_run is None:
             lines.append("debug: candidate run: none")
         else:
-            lines.append(f"debug: candidate run: run_id={candidate_run.run_id!r}  cases={len(candidate_run.cases)}")
+            lines.append(f"debug: candidate run_id: {candidate_run.run_id}  cases: {len(candidate_run.cases)}")
 
-        lines.append("debug: group_by=['custom', 'group']")
+        orig_postfixes = _read_postfixes(self.config, "benchmark_original_postfix")
+        ref_postfixes = _read_postfixes(self.config, "benchmark_reference_postfix")
+        lines.append(f"debug: original_postfixes: {orig_postfixes}")
+        lines.append(f"debug: reference_postfixes: {ref_postfixes}")
+        lines.append("debug: group_by: ['custom', 'group']")
+        lines.append(f"debug: benchmark_compare: {self.config.getoption('benchmark_compare', default=None)}")
+        lines.append(f"debug: benchmark_save: {self.config.getoption('benchmark_save', default=None)}")
 
         return lines
 
     def _build_summary_table_text(self) -> str | None:
         reference_run = self.state.reference_run
         candidate_run = self._build_candidate_run()
-        if reference_run is None or candidate_run is None:
+        if candidate_run is None:
             return None
 
-        improvements = analyze_method_improvements(
-            candidate_run=candidate_run,
-            reference_run=reference_run,
-            group_by=["custom", "group"],
-        )
-        if not improvements:
-            return None
+        orig_postfixes = _read_postfixes(self.config, "benchmark_original_postfix")
+        ref_postfixes = _read_postfixes(self.config, "benchmark_reference_postfix")
+        sections: list[str] = []
 
-        return "\n\n".join(
-            build_analysis_tables(
-                improvements,
-                candidate_run.run_id,
-                current_benchmark_header=build_benchmark_header_label(candidate_run.source_file, candidate_run.run_id),
-                comparison_benchmark_header=build_benchmark_header_label(
-                    reference_run.source_file,
-                    reference_run.run_id,
-                ),
+        # 1. Regression table: flat per-method comparison vs previous run
+        if reference_run is not None:
+            regression = build_regression_improvements(candidate_run, reference_run)
+            if regression:
+                candidate_label = build_benchmark_header_label(candidate_run.source_file, candidate_run.run_id)
+                reference_label = build_benchmark_header_label(reference_run.source_file, reference_run.run_id)
+                sections.append(
+                    build_regression_table(
+                        regression,
+                        candidate_label=candidate_label,
+                        reference_label=reference_label,
+                    )
+                )
+        else:
+            sections.append(
+                "Warning: No reference benchmark file found. "
+                "Run with --benchmark-save or --benchmark-autosave first to enable regression comparison."
             )
-        )
+
+        # 2. Postfix comparison: compare original-postfix vs reference-postfix methods
+        #    This works within the candidate run itself, so no reference run is needed.
+        if orig_postfixes and ref_postfixes:
+            postfix_improvements = build_postfix_comparison(
+                candidate_run,
+                original_postfixes=orig_postfixes,
+                reference_postfixes=ref_postfixes,
+            )
+            if postfix_improvements:
+                sections.extend(
+                    build_postfix_comparison_table(
+                        postfix_improvements,
+                        original_postfixes=orig_postfixes,
+                        reference_postfixes=ref_postfixes,
+                    )
+                )
+        else:
+            missing = []
+            if not orig_postfixes:
+                missing.append("--benchmark-original-postfix")
+            if not ref_postfixes:
+                missing.append("--benchmark-reference-postfix")
+            sections.append(f"Warning: Postfix comparison table skipped. Provide {' and '.join(missing)} to enable it.")
+
+        return "\n\n".join(sections) if sections else None
 
     def _build_benchmark_warning_text(self) -> str | None:
         if not self._should_warn_about_disabled_benchmarking():
@@ -184,8 +223,8 @@ class PytestParkBenchmarkPlugin:
             run_id=self._current_run_id(),
             source_file="<live>",
             created_at=datetime.now(tz=UTC),
-            original_postfix=_read_postfix(self.config, "benchmark_original_postfix"),
-            reference_postfix=_read_postfix(self.config, "benchmark_reference_postfix"),
+            original_postfix=_read_postfixes(self.config, "benchmark_original_postfix"),
+            reference_postfix=_read_postfixes(self.config, "benchmark_reference_postfix"),
         )
 
     def _build_current_benchmark_payload(self, metadata: Any) -> dict[str, Any]:
@@ -212,8 +251,8 @@ class PytestParkBenchmarkPlugin:
         return load_benchmark_payload(
             payload,
             source_file=str(path),
-            original_postfix=_read_postfix(self.config, "benchmark_original_postfix"),
-            reference_postfix=_read_postfix(self.config, "benchmark_reference_postfix"),
+            original_postfix=_read_postfixes(self.config, "benchmark_original_postfix"),
+            reference_postfix=_read_postfixes(self.config, "benchmark_reference_postfix"),
         )
 
     def _current_run_id(self) -> str:
@@ -253,6 +292,34 @@ def _is_single_shot_benchmark_payload(payload: dict[str, Any]) -> bool:
         return False
 
     return rounds == 1 and iterations == 1
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    group = parser.getgroup("pytest-park", "pytest-park benchmark comparison options")
+    group.addoption(
+        "--benchmark-original-postfix",
+        action="store",
+        default="",
+        dest="benchmark_original_postfix",
+        help="Comma-separated postfixes identifying original/baseline implementations (e.g. '_np,_numpy').",
+    )
+    group.addoption(
+        "--benchmark-reference-postfix",
+        action="store",
+        default="",
+        dest="benchmark_reference_postfix",
+        help="Comma-separated postfixes identifying reference/new implementations (e.g. '_pt,_torch').",
+    )
+    parser.addini(
+        "benchmark_original_postfix",
+        default="",
+        help="Comma-separated postfixes identifying original/baseline implementations (e.g. '_np,_numpy').",
+    )
+    parser.addini(
+        "benchmark_reference_postfix",
+        default="",
+        help="Comma-separated postfixes identifying reference/new implementations (e.g. '_pt,_torch').",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:

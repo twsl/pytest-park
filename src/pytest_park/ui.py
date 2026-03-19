@@ -15,6 +15,7 @@ from pytest_park.core import (
     summarize_groups,
 )
 from pytest_park.data import load_benchmark_folder
+from pytest_park.models import MethodHistoryComparison
 
 
 def serve_dashboard(
@@ -242,13 +243,11 @@ def serve_dashboard(
             overview = build_overview_statistics(deltas)
 
             compared_runs_label.text = f"Runs: {reference_run.run_id} -> {candidate_run.run_id}"
-            case_count_label.text = f"Cases: {overview['count']}"
-            improved_label.text = f"Improved: {overview['improved']}"
-            regressed_label.text = f"Regressed: {overview['regressed']}"
-            avg_delta_label.text = (
-                f"Avg delta: {overview['avg_delta_pct']:.2f}% (median {overview['median_delta_pct']:.2f}%)"
-            )
-            avg_speedup_label.text = f"Avg speedup: {overview['avg_speedup']:.3f}x"
+            case_count_label.text = f"Cases: {overview.count}"
+            improved_label.text = f"Improved: {overview.improved}"
+            regressed_label.text = f"Regressed: {overview.regressed}"
+            avg_delta_label.text = f"Avg delta: {overview.avg_delta_pct:.2f}% (median {overview.median_delta_pct:.2f}%)"
+            avg_speedup_label.text = f"Avg speedup: {overview.avg_speedup:.3f}x"
 
             best_case = min(deltas, key=lambda item: item.delta_pct, default=None)
             worst_case = max(deltas, key=lambda item: item.delta_pct, default=None)
@@ -262,8 +261,8 @@ def serve_dashboard(
             method_stats = build_method_statistics(deltas, selected_method) if selected_method else None
             if method_stats:
                 method_label.text = (
-                    f"Method {selected_method}: count={method_stats['count']} avg_delta={method_stats['avg_delta_pct']:.2f}% "
-                    f"avg_speedup={method_stats['avg_speedup']:.3f}"
+                    f"Method {selected_method}: count={method_stats.count} avg_delta={method_stats.avg_delta_pct:.2f}% "
+                    f"avg_speedup={method_stats.avg_speedup:.3f}"
                 )
             else:
                 method_label.text = "Method statistics unavailable for selected method"
@@ -275,10 +274,10 @@ def serve_dashboard(
                 if selected_method
                 else []
             )
-            history_chart.options["xAxis"]["data"] = [f"{item['run_id']} ({item['distinct']})" for item in history]
-            history_chart.options["series"][0]["data"] = [round(float(item["mean"]), 6) for item in history]
-            history_chart.options["series"][1]["data"] = [round(float(item["delta_pct"]), 2) for item in history]
-            history_chart.options["series"][2]["data"] = [round(float(item["speedup"]), 3) for item in history]
+            history_chart.options["xAxis"]["data"] = [f"{item.run_id} ({item.distinct})" for item in history]
+            history_chart.options["series"][0]["data"] = [round(item.mean, 6) for item in history]
+            history_chart.options["series"][1]["data"] = [round(item.delta_pct, 2) for item in history]
+            history_chart.options["series"][2]["data"] = [round(item.speedup, 3) for item in history]
             history_chart.update()
 
             dist_labels, dist_counts = _build_delta_distribution(deltas)
@@ -311,18 +310,18 @@ def serve_dashboard(
                         {
                             "tooltip": {"trigger": "axis"},
                             "legend": {"data": ["original", "new"]},
-                            "xAxis": {"type": "category", "data": [str(item["argument"]) for item in rows]},
+                            "xAxis": {"type": "category", "data": [item.argument for item in rows]},
                             "yAxis": {"type": "value", "name": "Mean"},
                             "series": [
                                 {
                                     "name": "original",
                                     "type": "bar",
-                                    "data": [round(float(item["original"]), 6) for item in rows],
+                                    "data": [round(item.original, 6) for item in rows],
                                 },
                                 {
                                     "name": "new",
                                     "type": "bar",
-                                    "data": [round(float(item["new"]), 6) for item in rows],
+                                    "data": [round(item.new, 6) for item in rows],
                                 },
                             ],
                         }
@@ -335,12 +334,12 @@ def serve_dashboard(
             )
             method_prior_table.rows = [
                 {
-                    "reference_run": str(item["reference_run_id"]),
-                    "distinct": str(item["distinct"]),
-                    "candidate_mean": round(float(item["mean"]), 6),
-                    "reference_mean": round(float(item["reference_mean"]), 6),
-                    "delta": round(float(item["delta_pct"]), 2),
-                    "speedup": round(float(item["speedup"]), 3),
+                    "reference_run": item.reference_run_id,
+                    "distinct": item.distinct,
+                    "candidate_mean": round(item.mean, 6),
+                    "reference_mean": round(item.reference_mean, 6),
+                    "delta": round(item.delta_pct, 2),
+                    "speedup": round(item.speedup, 3),
                 }
                 for item in prior_rows
             ]
@@ -356,9 +355,9 @@ def serve_dashboard(
                 if not method_history:
                     continue
 
-                history_by_run: dict[str, list[dict[str, float | str | None]]] = {}
+                history_by_run: dict[str, list[MethodHistoryComparison]] = {}
                 for point in method_history:
-                    history_by_run.setdefault(str(point["run_id"]), []).append(point)
+                    history_by_run.setdefault(point.run_id, []).append(point)
 
                 ordered_runs = sorted(
                     history_by_run.keys(), key=lambda run_id: run_ids.index(run_id) if run_id in run_ids else -1
@@ -366,16 +365,16 @@ def serve_dashboard(
                 history_bits: list[str] = []
                 for run_id in ordered_runs:
                     run_points = history_by_run[run_id]
-                    avg_mean = sum(float(item["mean"]) for item in run_points) / len(run_points)
-                    avg_delta = sum(float(item["delta_pct"]) for item in run_points) / len(run_points)
+                    avg_mean = sum(item.mean for item in run_points) / len(run_points)
+                    avg_delta = sum(item.delta_pct for item in run_points) / len(run_points)
                     history_bits.append(f"{run_id}:{avg_mean:.6f} ({avg_delta:.2f}%)")
 
                 candidate_points = history_by_run.get(candidate_run.run_id)
                 if not candidate_points:
                     continue
 
-                current_mean = sum(float(item["mean"]) for item in candidate_points) / len(candidate_points)
-                reference_mean = sum(float(item["reference_mean"]) for item in candidate_points) / len(candidate_points)
+                current_mean = sum(item.mean for item in candidate_points) / len(candidate_points)
+                reference_mean = sum(item.reference_mean for item in candidate_points) / len(candidate_points)
                 delta_pct = ((current_mean - reference_mean) / reference_mean) * 100.0 if reference_mean > 0 else 0.0
                 speedup = reference_mean / current_mean if current_mean > 0 else 0.0
 

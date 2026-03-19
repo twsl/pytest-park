@@ -81,7 +81,7 @@ def test_pytest_plugin_emits_inline_terminal_output(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stdout + "\nSTDERR:\n" + result.stderr
     assert "pytest-park" in result.stdout
-    assert "Current Run vs Comparison Run (Candidate: current)" in result.stdout
+    assert "Regression: current vs 0001_reference.json" in result.stdout
     assert "0001_reference.json" in result.stdout
     assert "inline" in result.stdout
     assert "test_inline_benchmark" in result.stdout

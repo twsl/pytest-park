@@ -55,10 +55,9 @@ def test_cli_analyze_command(benchmark_folder, capsys, monkeypatch) -> None:
     captured = capsys.readouterr()
 
     assert exit_code == 0
-    assert "Current Run vs Comparison Run (Candidate: run-candidate-v2)" in captured.out
+    assert "Regression: run_candidate_v2.json vs run_reference.json" in captured.out
     assert "run_candidate_v2.json" in captured.out
     assert "run_reference.json" in captured.out
-    assert "param:device=cpu" in captured.out
     assert "reduce_sum" in captured.out
 
 
@@ -74,7 +73,7 @@ def test_cli_analyze_defaults_to_latest_vs_previous(benchmark_folder, capsys) ->
     captured = capsys.readouterr()
 
     assert exit_code == 0
-    assert "Current Run vs Comparison Run (Candidate: run-candidate-v2)" in captured.out
+    assert "Regression: run_candidate_v2.json vs run_candidate_v1.json" in captured.out
     assert "run_candidate_v2.json" in captured.out
     assert "run_candidate_v1.json" in captured.out
 
@@ -84,7 +83,7 @@ def test_cli_analyze_with_exclude_param(benchmark_folder, capsys) -> None:
     captured = capsys.readouterr()
 
     assert exit_code == 0
-    assert "Current Run vs Comparison Run (Candidate: run-candidate-v2)" in captured.out
+    assert "Regression:" in captured.out
 
 
 def test_cli_analyze_shows_message_when_no_comparison_benchmark_exists(tmp_path: Path, capsys) -> None:
@@ -97,7 +96,7 @@ def test_cli_analyze_shows_message_when_no_comparison_benchmark_exists(tmp_path:
 
     assert exit_code == 0
     assert "No comparison benchmark found. Run with --benchmark-save first to create a benchmark file." in captured.out
-    assert "Current Run vs Comparison Run" not in captured.out
+    assert "Regression:" not in captured.out
 
 
 def test_cli_no_args_starts_interactive_mode(monkeypatch) -> None:

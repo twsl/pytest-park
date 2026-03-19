@@ -17,8 +17,8 @@ def load_benchmark_payload(
     payload: dict[str, Any],
     *,
     source_file: str = "<memory>",
-    original_postfix: str | None = None,
-    reference_postfix: str | None = None,
+    original_postfix: list[str] | str | None = None,
+    reference_postfix: list[str] | str | None = None,
 ) -> BenchmarkRun | None:
     """Load one in-memory pytest-benchmark payload into a run model."""
     postfixes = _configured_postfixes(original_postfix, reference_postfix)
@@ -36,8 +36,8 @@ def build_benchmark_run(
     machine: str | None = None,
     python_version: str | None = None,
     metadata: dict[str, Any] | None = None,
-    original_postfix: str | None = None,
-    reference_postfix: str | None = None,
+    original_postfix: list[str] | str | None = None,
+    reference_postfix: list[str] | str | None = None,
 ) -> BenchmarkRun:
     """Build a run model from live pytest-benchmark entries."""
     postfixes = _configured_postfixes(original_postfix, reference_postfix)
@@ -57,8 +57,8 @@ def build_benchmark_run(
 
 def load_benchmark_folder(
     folder: str | Path,
-    original_postfix: str | None = None,
-    reference_postfix: str | None = None,
+    original_postfix: list[str] | str | None = None,
+    reference_postfix: list[str] | str | None = None,
 ) -> list[BenchmarkRun]:
     """Load pytest-benchmark JSON artifacts from a folder recursively."""
     root = Path(folder)
@@ -85,8 +85,8 @@ def load_benchmark_folder(
 def _load_artifact(
     artifact: Path,
     *,
-    original_postfix: str | None = None,
-    reference_postfix: str | None = None,
+    original_postfix: list[str] | str | None = None,
+    reference_postfix: list[str] | str | None = None,
 ) -> BenchmarkRun | None:
     try:
         payload = json.loads(artifact.read_text(encoding="utf-8"))
@@ -275,10 +275,15 @@ def _string_or_none(value: Any) -> str | None:
     return text or None
 
 
-def _configured_postfixes(original_postfix: str | None, reference_postfix: str | None) -> list[str]:
-    postfixes = []
-    if original_postfix and original_postfix.strip():
-        postfixes.append(original_postfix.strip())
-    if reference_postfix and reference_postfix.strip():
-        postfixes.append(reference_postfix.strip())
+def _configured_postfixes(
+    original_postfix: list[str] | str | None,
+    reference_postfix: list[str] | str | None,
+) -> list[str]:
+    postfixes: list[str] = []
+    for src in (original_postfix, reference_postfix):
+        if isinstance(src, str):
+            if src.strip():
+                postfixes.append(src.strip())
+        elif isinstance(src, list):
+            postfixes.extend(p.strip() for p in src if p and p.strip())
     return postfixes

@@ -4,8 +4,16 @@ from pytest_park.models.benchmark import (
     BenchmarkRun,
     BenchmarkStats,
     GroupSummary,
-    MethodImprovement,
     TrendPoint,
+)
+from pytest_park.models.results import (
+    ImprovementSummary,
+    MethodHistoryComparison,
+    MethodHistoryPoint,
+    MethodImprovement,
+    OverviewStatistics,
+    PriorRunComparison,
+    SplitBarRow,
 )
 
 __all__ = [
@@ -14,6 +22,12 @@ __all__ = [
     "BenchmarkRun",
     "BenchmarkStats",
     "GroupSummary",
+    "ImprovementSummary",
+    "MethodHistoryComparison",
+    "MethodHistoryPoint",
     "MethodImprovement",
+    "OverviewStatistics",
+    "PriorRunComparison",
+    "SplitBarRow",
     "TrendPoint",
 ]

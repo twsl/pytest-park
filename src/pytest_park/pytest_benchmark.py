@@ -9,8 +9,8 @@ def default_pytest_benchmark_group_stats(
     benchmarks: list[Any],
     group_by: str,
     *,
-    original_postfix: str | None = None,
-    reference_postfix: str | None = None,
+    original_postfix: list[str] | str | None = None,
+    reference_postfix: list[str] | str | None = None,
     group_values_by_postfix: dict[str, str] | None = None,
     ignore_params: list[str] | None = None,
 ) -> list[tuple[str | None, list[Any]]]:
@@ -19,11 +19,15 @@ def default_pytest_benchmark_group_stats(
     This is intended as a drop-in helper for overriding ``pytest_benchmark_group_stats``
     in a test suite and keeping benchmark name parts available in ``extra_info``.
     """
-    configured_original_postfix = original_postfix or _read_postfix(config, "benchmark_original_postfix")
-    configured_reference_postfix = reference_postfix or _read_postfix(config, "benchmark_reference_postfix")
-    postfixes = [value for value in (configured_original_postfix, configured_reference_postfix) if value]
+    cli_original = _read_postfixes(config, "benchmark_original_postfix")
+    cli_reference = _read_postfixes(config, "benchmark_reference_postfix")
+    configured_original = cli_original or _normalize_postfix_arg(original_postfix)
+    configured_reference = cli_reference or _normalize_postfix_arg(reference_postfix)
+    postfixes = configured_original + configured_reference
     postfix_value_map = {
-        key.strip(): value for key, value in (group_values_by_postfix or {}).items() if key and key.strip()
+        _normalize_postfix_key(key): value
+        for key, value in (group_values_by_postfix or {}).items()
+        if key and key.strip()
     }
 
     groups: dict[str | None, list[Any]] = defaultdict(list)
@@ -58,7 +62,7 @@ def default_pytest_benchmark_group_stats(
                         key.append(f"{param_name}={params_dict[param_name]}")
             elif grouping in {"postfix", "benchmark_postfix"}:
                 fallback = parts.postfix or "none"
-                key.append(postfix_value_map.get(fallback, fallback))
+                key.append(postfix_value_map.get(_normalize_postfix_key(fallback), fallback))
             else:
                 # Fallback for unknown groupings
                 key.append(benchmark_name)
@@ -105,13 +109,44 @@ def _read_postfix(config: Any, option_name: str) -> str | None:
             return value.strip()
 
     option = getattr(config, "option", None)
-    if option is None:
-        return None
+    if option is not None:
+        value = getattr(option, option_name, "")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
 
-    value = getattr(option, option_name, "")
-    if isinstance(value, str) and value.strip():
-        return value.strip()
+    # Fall back to ini-file config (pytest.ini / pyproject.toml / setup.cfg)
+    getini = getattr(config, "getini", None)
+    if callable(getini):
+        try:
+            value = getini(option_name)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        except (ValueError, KeyError):
+            pass
+
     return None
+
+
+def _read_postfixes(config: Any, option_name: str) -> list[str]:
+    """Read a comma-separated list of postfixes from a config option."""
+    raw = _read_postfix(config, option_name)
+    if not raw:
+        return []
+    return [p.strip() for p in raw.split(",") if p.strip()]
+
+
+def _normalize_postfix_arg(value: list[str] | str | None) -> list[str]:
+    """Normalize a postfix argument that may be a string, list, or None."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [p.strip() for p in value.split(",") if p.strip()]
+    return [p.strip() for p in value if p and p.strip()]
+
+
+def _normalize_postfix_key(postfix: str) -> str:
+    """Normalize a postfix for comparison: strip whitespace and leading underscores/hyphens."""
+    return postfix.strip().lstrip("_").lstrip("-")
 
 
 def _read_benchmark_name(benchmark: Any) -> str:

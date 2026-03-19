@@ -6,14 +6,14 @@ import sys
 
 from pytest_park.__about__ import __version__
 from pytest_park.core import (
-    analyze_method_improvements,
     attach_profiler_data,
+    build_regression_improvements,
     select_candidate_run,
     select_latest_and_previous_runs,
     select_reference_run,
 )
+from pytest_park.core.reporting import build_benchmark_header_label, build_regression_table
 from pytest_park.data import BenchmarkLoadError, ProfilerLoadError, load_benchmark_folder, load_profiler_folder
-from pytest_park.reporting import build_analysis_tables, build_benchmark_header_label
 from pytest_park.ui import serve_dashboard
 
 
@@ -140,22 +140,15 @@ def _cmd_analyze(
         reference_run = select_reference_run(runs, reference) if reference else select_latest_and_previous_runs(runs)[0]
         candidate_run = select_candidate_run(runs, candidate, reference_run)
 
-    improvements = analyze_method_improvements(
-        candidate_run=candidate_run,
-        reference_run=reference_run,
-        group_by=grouping or ["custom", "group"],
-        exclude_params=exclude_params or None,
-    )
+    if reference_run is None:
+        print("No comparison benchmark found. Run with --benchmark-save first to create a benchmark file.")
+        return
 
-    for table in build_analysis_tables(
-        improvements,
-        candidate_run.run_id,
-        current_benchmark_header=build_benchmark_header_label(candidate_run.source_file, candidate_run.run_id),
-        comparison_benchmark_header=(
-            build_benchmark_header_label(reference_run.source_file, reference_run.run_id) if reference_run else None
-        ),
-    ):
-        print(table)
+    regression = build_regression_improvements(candidate_run, reference_run)
+    if regression:
+        candidate_label = build_benchmark_header_label(candidate_run.source_file, candidate_run.run_id)
+        reference_label = build_benchmark_header_label(reference_run.source_file, reference_run.run_id)
+        print(build_regression_table(regression, candidate_label=candidate_label, reference_label=reference_label))
 
 
 def _select_previous_run(runs, candidate_run):

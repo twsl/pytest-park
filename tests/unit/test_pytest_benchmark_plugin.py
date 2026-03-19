@@ -242,13 +242,12 @@ def test_plugin_builds_summary_table_from_reference_run() -> None:
     table_text = plugin._build_summary_table_text()
 
     assert table_text is not None
-    assert "Current Run vs Comparison Run (Candidate: current)" in table_text
+    assert "Regression: current vs baseline.json" in table_text
     assert "current" in table_text
     assert "baseline.json" in table_text
-    assert "sorting" in table_text
     assert "sort_values" in table_text
-    assert "+0.2000s" in table_text
-    assert "+20.0000%" in table_text
+    assert "-0.2000s" in table_text
+    assert "-20.0000%" in table_text
 
 
 def test_plugin_writes_summary_section_to_terminal_reporter() -> None:
@@ -260,7 +259,7 @@ def test_plugin_writes_summary_section_to_terminal_reporter() -> None:
     plugin.pytest_terminal_summary(reporter)
 
     assert reporter.sections == ["pytest-park"]
-    assert any("Current Run vs Comparison Run (Candidate: current)" in line for line in reporter.lines)
+    assert any("Regression: current vs baseline.json" in line for line in reporter.lines)
     assert any("sort_values" in line for line in reporter.lines)
 
 
@@ -275,7 +274,7 @@ def test_plugin_writes_fallback_summary_without_terminal_reporter(monkeypatch) -
 
     output = stream.getvalue()
     assert output.startswith("\npytest-park\n")
-    assert "Current Run vs Comparison Run (Candidate: current)" in output
+    assert "Regression: current vs baseline.json" in output
     assert "sort_values" in output
 
 
@@ -292,7 +291,7 @@ def test_plugin_summary_uses_strict_logical_groups_instead_of_param_fallback() -
     table_text = plugin._build_summary_table_text()
 
     assert table_text is not None
-    assert "ungrouped" in table_text
+    assert "Regression: current vs baseline.json" in table_text
     assert "params:device=cpu" not in table_text
 
 
