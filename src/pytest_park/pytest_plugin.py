@@ -311,7 +311,9 @@ def _select_reference_payloads(config: pytest.Config, benchmark_session: Any) ->
     compare_value = config.getoption("benchmark_compare", default=[])
 
     if compare_value not in (None, [], False):
-        loaded = benchmark_session.storage.load(None if compare_value is True else compare_value)
+        loaded = (
+            benchmark_session.storage.load() if compare_value is True else benchmark_session.storage.load(compare_value)
+        )
         return list(loaded)
 
     loaded = list(benchmark_session.storage.load())

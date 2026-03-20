@@ -187,6 +187,28 @@ def test_select_reference_payloads_uses_explicit_compare() -> None:
     assert storage.calls == ["0001"]
 
 
+def test_select_reference_payloads_compare_true_loads_all_without_none_arg() -> None:
+    """--benchmark-compare flag without a value should not pass None to storage.load()."""
+
+    class _StrictStorage:
+        """Load that raises if given explicit None (like real pytest-benchmark storage)."""
+
+        def __init__(self, entries: list[tuple[Path, dict[str, Any]]]) -> None:
+            self.entries = entries
+
+        def load(self, *args: Any):
+            if args and args[0] is None:
+                raise TypeError("expected str, bytes or os.PathLike object, not NoneType")
+            return iter(self.entries)
+
+    storage = _StrictStorage([(Path("baseline.json"), _reference_payload())])
+    config = _Config(benchmark_compare=True)
+
+    selected = _select_reference_payloads(cast(pytest.Config, config), type("Session", (), {"storage": storage})())
+
+    assert len(selected) == 1
+
+
 def test_select_reference_payloads_uses_latest_saved_run_when_saving() -> None:
     storage = _Storage(
         [
