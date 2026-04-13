@@ -49,7 +49,7 @@ dev = [
     "bandit>=1.9.4",
     "prek>=0.3.8",
     "vulture>=2.16",
-    "copier>=9.14.1",
+    "copier>=9.14.3",
 ]
 test = [
     "pytest>=9.0.3",
