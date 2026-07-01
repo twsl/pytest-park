@@ -44,10 +44,10 @@ default-groups = "all"
 
 [dependency-groups]
 dev = [
-    "ruff>=0.15.18",
-    "ty>=0.0.52",
+    "ruff>=0.15.19",
+    "ty>=0.0.55",
     "bandit>=1.9.4",
-    "prek>=0.4.4",
+    "prek>=0.4.5",
     "vulture>=2.16",
     "copier>=9.15.2",
 ]
@@ -67,7 +67,7 @@ docs = [
     "mkdocs-git-authors-plugin>=0.10.0",
     "mkapi>=4.5.0",
     "markdown-callouts>=0.4.0",
-    "pymdown-extensions>=10.21.3",
+    "pymdown-extensions>=11.0.0",
     "pygments>=2.20.0",
 ]
 debug = [
