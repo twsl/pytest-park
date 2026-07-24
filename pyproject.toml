@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytest-park"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 description = "Organise and analyse your pytest benchmarks"
 readme = "README.md"
 license = { text = "MIT" }
@@ -20,12 +20,12 @@ dynamic = [
     "version"
 ]
 dependencies = [
-    "rich>=14.3.3",
+    "rich>=15.0.0",
 ]
 
 [project.optional-dependencies]
 ui = [
-    "nicegui>=3.8.0",
+    "nicegui>=3.15.0",
 ]
 
 [project.urls]
@@ -39,17 +39,17 @@ default-groups = "all"
 #     "dev",
 #     "test",
 #     "docs",
-#     "debug"
+#     "debu
 # ]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.15.20",
-    "ty>=0.0.55",
+    "ruff>=0.16.0",
+    "ty>=0.0.63",
     "bandit>=1.9.4",
-    "prek>=0.4.6",
+    "prek>=0.4.10",
     "vulture>=2.16",
-    "copier>=9.16.0",
+    "copier>=9.17.0",
 ]
 test = [
     "pytest>=9.0.3",
@@ -61,13 +61,13 @@ test = [
 ]
 docs = [
     "mkdocs>=1.6.1",
-    "mkdocs-material>=9.7.6",
+    "mkdocs-material>=9.7.7",
     "mkdocs-git-revision-date-localized-plugin>=1.5.3",
     "mkdocs-awesome-nav>=3.3.0",
     "mkdocs-git-authors-plugin>=0.10.0",
     "mkapi>=4.5.0",
     "markdown-callouts>=0.4.0",
-    "pymdown-extensions>=11.0.0",
+    "pymdown-extensions>=11.0.1",
     "pygments>=2.20.0",
 ]
 debug = [
@@ -249,7 +249,7 @@ quote-style = "double"
 skips = ['*_test.py', '*/test_*.py']
 
 [tool.ty.environment]
-python-version = "3.11"
+python-version = "3.12"
 python-platform = "linux"
 root = ["./src"]
 
