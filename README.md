@@ -87,10 +87,10 @@ def pytest_benchmark_group_stats(config, benchmarks, group_by):
         config,
         benchmarks,
         group_by,
-        original_postfix="_orig",      # or a list: ["_np", "_numpy"]
-        reference_postfix="_ref",       # or a list: ["_pt", "_torch"]
+        original_postfix="_orig",  # or a list: ["_np", "_numpy"]
+        reference_postfix="_ref",  # or a list: ["_pt", "_torch"]
         group_values_by_postfix={
-            "orig": "original",         # leading underscores are stripped for matching
+            "orig": "original",  # leading underscores are stripped for matching
             "ref": "reference",
         },
     )
