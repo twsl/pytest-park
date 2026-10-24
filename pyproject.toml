@@ -67,12 +67,12 @@ docs = [
     "mkdocs-git-authors-plugin>=0.10.0",
     "mkapi>=4.5.0",
     "markdown-callouts>=0.4.0",
-    "pymdown-extensions>=11.0.1",
+    "pymdown-extensions>=12.3",
     "pygments>=2.20.0",
 ]
 debug = [
     "ipdb>=0.13.9",
-    "line-profiler>=5.0.2",
+    "line-profiler>=5.1.0",
 ]
 
 [project.entry-points."pytest11"]
